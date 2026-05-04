@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:?OPENAI_API_KEY required}
+      - PINECONE_API_KEY=${PINECONE_API_KEY:?PINECONE_API_KEY required}
+      - RAGQA_PINECONE_INDEX=${RAGQA_PINECONE_INDEX:-ragqa-chunks}
+      - RAGQA_PINECONE_CLOUD=${RAGQA_PINECONE_CLOUD:-aws}
+      - RAGQA_PINECONE_REGION=${RAGQA_PINECONE_REGION:-us-east-1}
+      - RAGQA_PINECONE_NAMESPACE=${RAGQA_PINECONE_NAMESPACE:-v1}
+      - RAGQA_DATA_DIR=/app/data
+      - RAGQA_LOG_LEVEL=INFO
+      - RAGQA_CORS_ORIGINS=http://localhost:3000
+    volumes:
+      - ./backend/data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy

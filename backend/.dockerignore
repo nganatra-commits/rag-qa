@@ -1,0 +1,27 @@
+# Dev / OS noise
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Secrets - must NEVER ship in an image
+.env
+.env.local
+.env.*.local
+
+# Source PDFs are ~38 MB; bake them too so re-ingest from inside the
+# container works (optional). Comment out the next line to exclude.
+# data/source-pdfs/
+
+# Don't ship the dev Dockerfile in the image
+Dockerfile
+docker-compose*.yml

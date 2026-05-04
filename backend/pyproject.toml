@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ragqa-backend"
+version = "0.1.0"
+description = "Image-friendly RAG backend for NWA Quality Analyst docs"
+requires-python = ">=3.12"
+readme = "README.md"
+license = { text = "Proprietary" }
+
+dependencies = [
+    # Web
+    "fastapi>=0.118",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.18",
+    # Config + validation
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    # PDF parsing & rewriting
+    "docling>=2.20",
+    "pikepdf>=10.5",
+    "pillow>=11.1",
+    "pymupdf>=1.25",
+    # Vectors & search (Pinecone serverless + sparse-dense hybrid)
+    "pinecone>=5.4",
+    "pinecone-text>=0.10",
+    "sentence-transformers>=3.3",
+    # LLM / VLM
+    "openai>=1.55",
+    # Logging / observability
+    "structlog>=24.4",
+    "opentelemetry-api>=1.30",
+    "opentelemetry-sdk>=1.30",
+    "opentelemetry-instrumentation-fastapi>=0.51b0",
+    # Misc
+    "tenacity>=9.0",
+    "httpx>=0.28",
+    "rich>=13.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[project.scripts]
+ragqa-ingest = "ragqa.scripts.ingest_pdfs:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ragqa"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "S", "C4", "TCH", "PL"]
+ignore = ["S101", "PLR0913"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

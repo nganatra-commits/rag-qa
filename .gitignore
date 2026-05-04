@@ -1,0 +1,58 @@
+# --- Secrets / credentials (NEVER commit) ---
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+.aws/
+credentials.csv
+*credentials*.csv
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+dist/
+*.log
+.turbo/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- RAG data (large + may include third-party copyrighted PDFs) ---
+backend/data/source-pdfs/
+backend/data/images/
+backend/data/lancedb/
+backend/data/cache/
+backend/data/*.jsonl
+
+# --- Terraform state + local overrides ---
+infra/aws/terraform/.terraform/
+infra/aws/terraform/.terraform.lock.hcl
+infra/aws/terraform/*.tfstate
+infra/aws/terraform/*.tfstate.*
+infra/aws/terraform/*.tfvars
+!infra/aws/terraform/example.tfvars
+infra/aws/terraform/plan.out
+infra/aws/terraform/crash.log
+infra/aws/terraform/crash.*.log
+
+# --- Build / test artifacts ---
+*.tsbuildinfo
+coverage/
