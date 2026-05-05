@@ -1,18 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Send, Loader2, Bot, User, Image as ImageIcon, ImageOff, RotateCcw, X } from "lucide-react";
+import { Send, Loader2, Bot, User, Image as ImageIcon, ImageOff, X, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { AssistantMessage } from "@/components/message";
 import { Citations } from "@/components/citation";
 import { cn, formatLatency, formatTokens } from "@/lib/utils";
+import { backend } from "@/lib/api";
 import type { AnswerResponse } from "@/types/api";
+import type { StoredTurn } from "@/lib/chat-history";
 
-type Turn =
-  | { role: "user"; content: string; id: string }
-  | { role: "assistant"; data: AnswerResponse; imagesEnabled: boolean; id: string }
-  | { role: "error"; message: string; id: string };
+export type Turn = StoredTurn;
 
 const DOCS = [
   { id: "qasetup", label: "Install" },
@@ -23,20 +22,35 @@ const DOCS = [
 const IMAGES_PREF_KEY = "ragqa.imagesEnabled";
 
 interface ChatInterfaceProps {
-  /** When true, render in widget-friendly mode (no full viewport height). */
+  /** Page = full-viewport ChatGPT-like layout. Widget = floating panel. */
   variant?: "page" | "widget";
   onClose?: () => void;
+  /** Optional sidebar toggle (page variant only). */
+  onToggleSidebar?: () => void;
+  /** Lifted state so the parent can persist it to history. */
+  turns: Turn[];
+  setTurns: React.Dispatch<React.SetStateAction<Turn[]>>;
+  docFilter: string[];
+  setDocFilter: React.Dispatch<React.SetStateAction<string[]>>;
+  /** Called when the user clicks "New chat". */
+  onNewChat?: () => void;
 }
 
-export function ChatInterface({ variant = "page", onClose }: ChatInterfaceProps) {
-  const [turns, setTurns] = React.useState<Turn[]>([]);
+export function ChatInterface({
+  variant = "page",
+  onClose,
+  onToggleSidebar,
+  turns,
+  setTurns,
+  docFilter,
+  setDocFilter,
+  onNewChat,
+}: ChatInterfaceProps) {
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [docFilter, setDocFilter] = React.useState<string[]>([]);
   const [imagesEnabled, setImagesEnabled] = React.useState<boolean>(true);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
-  // Load image preference from localStorage on mount
   React.useEffect(() => {
     try {
       const v = window.localStorage.getItem(IMAGES_PREF_KEY);
@@ -67,22 +81,13 @@ export function ChatInterface({ variant = "page", onClose }: ChatInterfaceProps)
     const turnImagesEnabled = imagesEnabled;
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: q,
-          doc_filter: docFilter.length ? docFilter : undefined,
-          // When images are off, don't send any to the LLM (saves tokens) AND
-          // hide on render. We only need the chunk text.
-          max_images: turnImagesEnabled ? undefined : 0,
-        }),
+      const data = await backend.answer({
+        query: q,
+        doc_filter: docFilter.length ? docFilter : undefined,
+        // When images are off, don't send any to the LLM (saves tokens) AND
+        // hide on render. We only need the chunk text.
+        max_images: turnImagesEnabled ? undefined : 0,
       });
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(err);
-      }
-      const data = (await res.json()) as AnswerResponse;
       setTurns((t) => [
         ...t,
         { role: "assistant", data, imagesEnabled: turnImagesEnabled, id: crypto.randomUUID() },
@@ -118,16 +123,30 @@ export function ChatInterface({ variant = "page", onClose }: ChatInterfaceProps)
       <header
         className={cn(
           "border-b border-[var(--border)] px-4 py-2.5 flex items-center justify-between gap-3 bg-[var(--background)]",
-          !isWidget && "px-6 py-3"
+          !isWidget && "px-4 sm:px-6 py-3"
         )}
       >
-        <div className="min-w-0">
-          <h1 className="font-semibold text-sm truncate">NWA QA Assistant</h1>
-          {!isWidget && (
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Image-friendly RAG · grounded in the QA docs
-            </p>
+        <div className="flex items-center gap-2 min-w-0">
+          {!isWidget && onToggleSidebar && (
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={onToggleSidebar}
+              aria-label="Toggle chat history"
+              title="Chat history"
+              className="h-8 w-8 md:hidden"
+            >
+              <Menu className="size-4" />
+            </Button>
           )}
+          <div className="min-w-0">
+            <h1 className="font-semibold text-sm truncate">NWA QA Assistant</h1>
+            {!isWidget && (
+              <p className="text-xs text-[var(--muted-foreground)] hidden sm:block">
+                Image-friendly RAG · grounded in the QA docs
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Toggle
@@ -139,21 +158,19 @@ export function ChatInterface({ variant = "page", onClose }: ChatInterfaceProps)
             {imagesEnabled ? <ImageIcon className="size-3.5" /> : <ImageOff className="size-3.5" />}
             {imagesEnabled ? "Images" : "Text only"}
           </span>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => {
-              setTurns([]);
-              setInput("");
-              setDocFilter([]);
-            }}
-            aria-label="New chat"
-            title="New chat"
-            disabled={busy || (turns.length === 0 && input === "")}
-            className="h-8 w-8"
-          >
-            <RotateCcw className="size-4" />
-          </Button>
+          {onNewChat && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onNewChat}
+              aria-label="New chat"
+              title="New chat"
+              disabled={busy}
+              className="h-8"
+            >
+              New chat
+            </Button>
+          )}
           {isWidget && onClose && (
             <Button
               size="icon"
@@ -171,7 +188,7 @@ export function ChatInterface({ variant = "page", onClose }: ChatInterfaceProps)
 
       <div className={cn(
         "border-b border-[var(--border)] px-4 py-2 flex gap-1.5 flex-wrap",
-        !isWidget && "px-6"
+        !isWidget && "px-4 sm:px-6"
       )}>
         {DOCS.map((d) => (
           <Button
@@ -194,7 +211,7 @@ export function ChatInterface({ variant = "page", onClose }: ChatInterfaceProps)
 
       <div ref={scrollRef} className={cn(
         "flex-1 overflow-y-auto",
-        isWidget ? "px-3 py-3" : "px-6 py-6"
+        isWidget ? "px-3 py-3" : "px-4 sm:px-6 py-6"
       )}>
         <div className={cn("space-y-5", !isWidget && "max-w-3xl mx-auto space-y-6")}>
           {turns.length === 0 && <EmptyState />}
@@ -212,7 +229,7 @@ export function ChatInterface({ variant = "page", onClose }: ChatInterfaceProps)
 
       <footer className={cn(
         "border-t border-[var(--border)] bg-[var(--background)]",
-        isWidget ? "px-3 py-2.5" : "px-6 py-4"
+        isWidget ? "px-3 py-2.5" : "px-4 sm:px-6 py-4"
       )}>
         <div className={cn("flex gap-2", !isWidget && "max-w-3xl mx-auto")}>
           <textarea
@@ -258,7 +275,8 @@ function TurnView({ turn }: { turn: Turn }) {
       </div>
     );
   }
-  const { data, imagesEnabled } = turn;
+  const data: AnswerResponse = turn.data;
+  const imagesEnabled: boolean = turn.imagesEnabled;
   return (
     <div className="flex gap-2.5">
       <Avatar role="assistant" />

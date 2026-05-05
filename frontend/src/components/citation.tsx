@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { AnswerCitation } from "@/types/api";
+import { usePdfViewer } from "@/components/pdf-viewer";
 
 interface CitationsProps {
   citations: AnswerCitation[];
@@ -13,8 +14,12 @@ interface CitationsProps {
  * Show only the citations the model actually referenced via [N] markers in
  * the answer body. If the answer has zero markers, render nothing — the
  * unused retrieved chunks would just be noise.
+ *
+ * The page reference itself is a button: clicking it opens the source PDF
+ * inline (popup) at the cited page via the global <PdfViewerProvider>.
  */
 export function Citations({ citations, answerText = "" }: CitationsProps) {
+  const pdf = usePdfViewer();
   const referencedIndexes = React.useMemo(() => {
     const out = new Set<number>();
     for (const m of answerText.matchAll(/\[(\d+)\]/g)) {
@@ -48,26 +53,44 @@ export function Citations({ citations, answerText = "" }: CitationsProps) {
         {usedFallback ? "Searched in" : "Sources"}
       </h3>
       <ol className="space-y-1.5 text-xs list-none p-0">
-        {shown.map(({ c, n }) => (
-          <li key={c.chunk_id} className="flex items-baseline gap-2">
-            <span className="font-mono text-[var(--muted-foreground)] shrink-0">
-              [{n}]
-            </span>
-            <span>
-              <span className="font-medium">{c.doc_id}</span>
-              {c.section_path.length > 0 && (
-                <span className="text-[var(--muted-foreground)]">
-                  {" · "}
-                  {c.section_path.join(" › ")}
-                </span>
-              )}
-              <span className="text-[var(--muted-foreground)]">
-                {" · "}pp. {c.page_start}
-                {c.page_end !== c.page_start ? `–${c.page_end}` : ""}
+        {shown.map(({ c, n }) => {
+          const pageLabel =
+            c.page_end !== c.page_start
+              ? `pp. ${c.page_start}–${c.page_end}`
+              : `p. ${c.page_start}`;
+          const sectionLabel = c.section_path.join(" › ");
+          return (
+            <li key={c.chunk_id} className="flex items-baseline gap-2">
+              <span className="font-mono text-[var(--muted-foreground)] shrink-0">
+                [{n}]
               </span>
-            </span>
-          </li>
-        ))}
+              <span>
+                <span className="font-medium">{c.doc_id}</span>
+                {c.section_path.length > 0 && (
+                  <span className="text-[var(--muted-foreground)]">
+                    {" · "}
+                    {sectionLabel}
+                  </span>
+                )}
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() =>
+                    pdf.open({
+                      docId: c.doc_id,
+                      page: c.page_start,
+                      label: sectionLabel || undefined,
+                    })
+                  }
+                  className="text-[var(--accent)] underline decoration-[var(--accent)]/40 underline-offset-2 hover:decoration-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-sm"
+                  title="Open PDF at this page"
+                >
+                  {pageLabel}
+                </button>
+              </span>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

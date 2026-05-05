@@ -5,6 +5,15 @@ import { ChevronLeft, ChevronRight, X, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AnswerImage } from "@/types/api";
 
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+
+function absUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  if (/^https?:\/\//.test(url)) return url;
+  return `${BACKEND_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 /**
  * In-page lightbox/gallery for the screenshots returned with an answer.
  * Backdrop click, ESC, and the × button all close it. Arrow keys navigate.
@@ -109,7 +118,7 @@ export function GalleryProvider({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <a
-                  href={current.cdn_url}
+                  href={absUrl(current.cdn_url)}
                   target="_blank"
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
@@ -134,7 +143,7 @@ export function GalleryProvider({ children }: { children: React.ReactNode }) {
             <div className="relative flex-1 min-h-0 flex items-center justify-center bg-[var(--muted)] p-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={current.cdn_url}
+                src={absUrl(current.cdn_url)}
                 alt={current.alt_text || current.caption || "screenshot"}
                 className="max-w-full max-h-full object-contain rounded shadow-sm bg-white"
               />
@@ -178,7 +187,7 @@ export function GalleryProvider({ children }: { children: React.ReactNode }) {
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={img.cdn_url}
+                        src={absUrl(img.cdn_url)}
                         alt=""
                         className="size-full object-cover bg-white"
                       />

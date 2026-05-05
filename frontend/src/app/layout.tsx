@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { GalleryProvider } from "@/components/image-gallery";
+import { PdfViewerProvider } from "@/components/pdf-viewer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-dvh">
-        <GalleryProvider>{children}</GalleryProvider>
+        <PdfViewerProvider>
+          <GalleryProvider>{children}</GalleryProvider>
+        </PdfViewerProvider>
       </body>
     </html>
   );

@@ -1,36 +1,119 @@
-import { ChatWidget } from "@/components/chat-widget";
+"use client";
 
+import * as React from "react";
+import { ChatInterface, type Turn } from "@/components/chat-interface";
+import { ChatSidebar } from "@/components/chat-sidebar";
+import {
+  deleteChat as deleteChatStorage,
+  deriveTitle,
+  loadChats,
+  upsertChat,
+  type StoredChat,
+} from "@/lib/chat-history";
+
+/**
+ * Full-page ChatGPT-like layout: persistent left sidebar with chat history,
+ * main pane with the conversation. Default landing experience — no floating
+ * widget. Chats are persisted to localStorage so closing the tab or hitting
+ * Esc does not lose the conversation.
+ */
 export default function Page() {
+  const [chats, setChats] = React.useState<StoredChat[]>([]);
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [turns, setTurns] = React.useState<Turn[]>([]);
+  const [docFilter, setDocFilter] = React.useState<string[]>([]);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
+  const hydratedRef = React.useRef(false);
+
+  // Load history once on mount and adopt the most-recent chat (if any) so
+  // the user comes back to where they left off.
+  React.useEffect(() => {
+    const loaded = loadChats();
+    setChats(loaded);
+    if (loaded.length > 0) {
+      const top = loaded[0];
+      setActiveId(top.id);
+      setTurns(top.turns);
+      setDocFilter(top.docFilter ?? []);
+    } else {
+      setActiveId(crypto.randomUUID());
+    }
+    hydratedRef.current = true;
+  }, []);
+
+  // Persist on every meaningful change. We only write when there's at least
+  // one turn so we don't fill history with empty placeholders.
+  React.useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (!activeId) return;
+    if (turns.length === 0) return;
+    const chat: StoredChat = {
+      id: activeId,
+      title: deriveTitle(turns),
+      updatedAt: Date.now(),
+      turns,
+      docFilter,
+    };
+    setChats(upsertChat(chat));
+  }, [turns, docFilter, activeId]);
+
+  const handleNewChat = React.useCallback(() => {
+    setActiveId(crypto.randomUUID());
+    setTurns([]);
+    setDocFilter([]);
+  }, []);
+
+  const handleSelectChat = React.useCallback(
+    (id: string) => {
+      const chat = chats.find((c) => c.id === id);
+      if (!chat) return;
+      setActiveId(chat.id);
+      setTurns(chat.turns);
+      setDocFilter(chat.docFilter ?? []);
+    },
+    [chats]
+  );
+
+  const handleDeleteChat = React.useCallback(
+    (id: string) => {
+      const next = deleteChatStorage(id);
+      setChats(next);
+      if (id === activeId) {
+        if (next.length > 0) {
+          const top = next[0];
+          setActiveId(top.id);
+          setTurns(top.turns);
+          setDocFilter(top.docFilter ?? []);
+        } else {
+          handleNewChat();
+        }
+      }
+    },
+    [activeId, handleNewChat]
+  );
+
   return (
-    <main className="min-h-dvh">
-      <div className="max-w-3xl mx-auto px-6 py-16">
-        <h1 className="text-3xl font-semibold tracking-tight mb-3">
-          NWA Quality Analyst — Knowledge Assistant
-        </h1>
-        <p className="text-[var(--muted-foreground)] mb-8 max-w-prose">
-          Ask anything about installation, the tutorial workflow, or any dialog
-          in the User's Manual. Answers cite exact pages and can include the
-          actual screenshot inline.
-        </p>
-
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--muted)] p-5 max-w-prose">
-          <h2 className="font-medium mb-2 text-sm">Try asking:</h2>
-          <ul className="text-sm space-y-1.5 text-[var(--muted-foreground)]">
-            <li>• "Walk me through running the NWA QA8 installer step by step."</li>
-            <li>• "Explain Creating and Editing Data Sets."</li>
-            <li>• "What does the Capability Analysis dialog do?"</li>
-            <li>• "Walk me through Tutorial Exercise 1."</li>
-          </ul>
-        </div>
-
-        <p className="text-xs text-[var(--muted-foreground)] mt-8">
-          Click the chat bubble in the bottom-right corner to start. Use the
-          toggle in the chat header to switch between text-only and image
-          answers.
-        </p>
+    <div className="flex h-dvh">
+      <ChatSidebar
+        chats={chats}
+        activeId={activeId}
+        onSelect={handleSelectChat}
+        onNew={handleNewChat}
+        onDelete={handleDeleteChat}
+        mobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+      />
+      <div className="flex-1 min-w-0 flex flex-col">
+        <ChatInterface
+          variant="page"
+          turns={turns}
+          setTurns={setTurns}
+          docFilter={docFilter}
+          setDocFilter={setDocFilter}
+          onNewChat={handleNewChat}
+          onToggleSidebar={() => setMobileSidebarOpen((v) => !v)}
+        />
       </div>
-
-      <ChatWidget />
-    </main>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-"""HTTP routes: /health, /retrieve, /answer, /feedback, /api/images/{id}."""
+"""HTTP routes: /health, /retrieve, /answer, /feedback, /api/images/{id}, /api/pdfs/{id}."""
 from __future__ import annotations
 
 import time
@@ -347,6 +347,41 @@ def serve_image(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="image not found")
     return FileResponse(path, media_type="image/png",
                         headers={"Cache-Control": "public, max-age=3600"})
+
+
+# Maps the lower-case doc_id used throughout the index to the actual
+# filename of the cleaned PDF on disk. Kept in sync with scripts/ingest_pdfs.py.
+_PDF_FILENAMES: dict[str, str] = {
+    "qasetup": "QAsetup.cleaned.pdf",
+    "qatutor": "QATutor.cleaned.pdf",
+    "qaman":   "QAman.cleaned.pdf",
+}
+
+
+@router.get("/api/pdfs/{doc_id}", tags=["pdfs"])
+def serve_pdf(
+    doc_id: str,
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    """Serve the cleaned source PDF inline so citation links can deep-link
+    to a specific page via #page=N in the browser PDF viewer."""
+    if not _is_safe_id(doc_id):
+        raise HTTPException(status_code=400, detail="invalid doc_id")
+    filename = _PDF_FILENAMES.get(doc_id.lower())
+    if filename is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown doc_id")
+    path = settings.source_pdfs_dir / filename
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pdf not found")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            # inline so the browser's PDF viewer renders it (allows #page=N).
+            "Content-Disposition": f'inline; filename="{filename}"',
+        },
+    )
 
 
 def _is_safe_id(image_id: str) -> bool:

@@ -22,6 +22,20 @@ import type { AnswerImage } from "@/types/api";
 const FIGURE_RE = /\[FIGURE:\s*([A-Za-z0-9_\-]+)\s*\]/g;
 const IMAGE_ID_FROM_URL_RE = /\/api\/images\/([A-Za-z0-9_\-]+)/;
 
+/**
+ * Backend serves images at /api/images/{id}. Since the frontend is now a
+ * static site (no Next.js rewrite proxy), we prepend the backend's public
+ * URL when the cdn_url is relative.
+ */
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+
+function absoluteImageUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  if (/^https?:\/\//.test(url)) return url;
+  return `${BACKEND_URL}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 interface AssistantMessageProps {
   text: string;
   images: AnswerImage[];
@@ -35,7 +49,6 @@ export function AssistantMessage({
   text: rawText,
   images: rawImages,
   referencedImageIds,
-  isRefusal,
   imagesEnabled = true,
 }: AssistantMessageProps) {
   // When images are disabled, strip the markers from the body so the user
@@ -66,25 +79,19 @@ export function AssistantMessage({
     return m;
   }, [images]);
 
-  // Track which bound images the body actually rendered, so we can show the
-  // rest in the "Related screenshots" tray below.
-  const inlinedIds = React.useMemo(
-    () => collectInlinedImageIds(text, imageById),
-    [text, imageById]
-  );
-
   const parts = React.useMemo(() => splitOnFigures(text), [text]);
 
   // Tray policy: disabled. Images only appear inline at their [FIGURE: id]
   // markers. Un-inlined bound images are hidden (still discoverable via
   // /retrieve in the API for power users / debugging).
 
-  // Ordered list of all images for the gallery: inlined ones in marker order
-  // first, then the rest. Stable across renders so prev/next is intuitive.
+  // Ordered list of images for the gallery: ONLY the ones actually inlined
+  // in the answer body (in marker order). Un-inlined "related" images from
+  // the retrieved set are intentionally excluded — they were confusing in
+  // the lightbox ("3/11 images" when only 3 are in the steps).
   const galleryOrder = React.useMemo<AnswerImage[]>(() => {
     const seen = new Set<string>();
     const out: AnswerImage[] = [];
-    // 1. inlined images, in the order they appear in the answer
     for (const part of parts) {
       if (part.type === "figure") {
         const img = imageById.get(part.imageId);
@@ -94,15 +101,8 @@ export function AssistantMessage({
         }
       }
     }
-    // 2. remaining images (tray)
-    for (const img of images) {
-      if (!seen.has(img.image_id)) {
-        seen.add(img.image_id);
-        out.push(img);
-      }
-    }
     return out;
-  }, [parts, imageById, images]);
+  }, [parts, imageById]);
 
   return (
     <div className="prose prose-sm max-w-none dark:prose-invert">
@@ -174,7 +174,7 @@ function InlineImage({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={img.cdn_url}
+          src={absoluteImageUrl(img.cdn_url)}
           alt={img.alt_text || img.caption || "screenshot"}
           loading="lazy"
           className="block w-full h-auto"
@@ -349,22 +349,6 @@ function makeMarkdownComponents(
       );
     },
   };
-}
-
-function collectInlinedImageIds(
-  text: string,
-  imageById: Map<string, AnswerImage>
-): Set<string> {
-  const ids = new Set<string>();
-  for (const m of text.matchAll(FIGURE_RE)) {
-    if (imageById.has(m[1])) ids.add(m[1]);
-  }
-  // Also count Markdown image URLs that point at /api/images/<id>
-  for (const m of text.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)) {
-    const um = m[1].match(IMAGE_ID_FROM_URL_RE);
-    if (um && imageById.has(um[1])) ids.add(um[1]);
-  }
-  return ids;
 }
 
 type Part =

@@ -1,15 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Static export — produces /out at build time, deployable to S3+CloudFront.
+  output: "export",
+  // The page is purely client-rendered chat; we don't use Next/image so this
+  // is just defensive in case anyone adds <Image>.
+  images: { unoptimized: true },
   reactStrictMode: true,
-  // Backend serves /api/images/{id}; we proxy them through Next so the browser
-  // sees a single origin and we can add caching headers consistently.
-  async rewrites() {
-    const backend = process.env.BACKEND_URL ?? "http://localhost:8000";
-    return [
-      { source: "/api/images/:image_id", destination: `${backend}/api/images/:image_id` },
-    ];
-  },
+  trailingSlash: true,
   typedRoutes: true,
 };
 

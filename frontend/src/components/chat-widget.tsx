@@ -2,20 +2,22 @@
 
 import * as React from "react";
 import { MessageSquare, X } from "lucide-react";
-import { ChatInterface } from "@/components/chat-interface";
+import { ChatInterface, type Turn } from "@/components/chat-interface";
 import { cn } from "@/lib/utils";
 
 /**
- * Floating chat widget. Renders a circular launcher in the bottom-right
- * corner that expands to a chat panel. Mobile-friendly: panel goes
- * full-screen on small viewports.
+ * Floating chat widget. Kept around for embedding the assistant on third-
+ * party pages. The default app experience is the full-page layout in
+ * src/app/page.tsx; this component is only mounted when imported explicitly.
  *
- * Drop into any page with: <ChatWidget />
+ * State (turns / doc filter) is persisted across open/close cycles so a
+ * stray Esc keypress does not wipe the conversation.
  */
 export function ChatWidget() {
   const [open, setOpen] = React.useState(false);
+  const [turns, setTurns] = React.useState<Turn[]>([]);
+  const [docFilter, setDocFilter] = React.useState<string[]>([]);
 
-  // Close on Escape
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -27,7 +29,6 @@ export function ChatWidget() {
 
   return (
     <>
-      {/* Launcher (FAB) */}
       <button
         type="button"
         aria-label={open ? "Close chat" : "Open chat"}
@@ -44,7 +45,6 @@ export function ChatWidget() {
         {open ? <X className="size-6" /> : <MessageSquare className="size-6" />}
       </button>
 
-      {/* Panel */}
       <div
         role="dialog"
         aria-modal={false}
@@ -52,9 +52,7 @@ export function ChatWidget() {
         className={cn(
           "fixed z-40 bg-[var(--background)] border border-[var(--border)]",
           "shadow-2xl overflow-hidden",
-          // mobile: nearly fullscreen
           "inset-3 sm:inset-auto",
-          // desktop: roomier bottom-right panel; grows on larger viewports
           "sm:bottom-24 sm:right-5",
           "sm:w-[560px] md:w-[640px] lg:w-[720px]",
           "sm:h-[760px] sm:max-h-[calc(100vh-7rem)]",
@@ -65,10 +63,19 @@ export function ChatWidget() {
             : "opacity-0 scale-95 pointer-events-none"
         )}
       >
-        {/* Render the chat only while open so /api/chat doesn't fire on mount
-            and the SSE/streaming logic can clean up between sessions. */}
         {open && (
-          <ChatInterface variant="widget" onClose={() => setOpen(false)} />
+          <ChatInterface
+            variant="widget"
+            onClose={() => setOpen(false)}
+            turns={turns}
+            setTurns={setTurns}
+            docFilter={docFilter}
+            setDocFilter={setDocFilter}
+            onNewChat={() => {
+              setTurns([]);
+              setDocFilter([]);
+            }}
+          />
         )}
       </div>
     </>
