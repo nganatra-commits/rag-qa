@@ -38,6 +38,7 @@ dependencies = [
     "tenacity>=9.0",
     "httpx>=0.28",
     "rich>=13.9",
+    "boto3>=1.35",
 ]
 
 [project.optional-dependencies]

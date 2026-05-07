@@ -122,7 +122,7 @@ export function ChatSidebar({
         </div>
 
         <footer className="px-3 py-2.5 border-t border-[var(--border)] text-[10px] text-[var(--muted-foreground)]">
-          Last 5 chats are saved locally.
+          Chats are saved to the server. Open any with its URL.
         </footer>
       </aside>
     </>

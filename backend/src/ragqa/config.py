@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     temperature: float = 0.2
     max_images_per_answer: int = 4
 
+    # --- Chat history (DynamoDB; blank table name disables persistence) ---
+    chats_table: str = ""
+    chats_region: str = "us-east-1"
+    chats_max_list: int = 50
+
     # --- Observability ---
     log_level: str = "INFO"
     log_json: bool = False

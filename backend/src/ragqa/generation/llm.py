@@ -54,7 +54,15 @@ class MultimodalAnswerer:
         self,
         query: str,
         hits: list[RetrievalHit],
+        history: list[tuple[str, str]] | None = None,
     ) -> AnswerResult:
+        """Generate an answer.
+
+        history: prior turns, oldest first, as `(role, content)` tuples where
+        role is "user" or "assistant". Past assistant turns are sent as
+        plain text only (no images, no [FIGURE: id] markers — those would
+        make the model think it has access to images it cannot see).
+        """
         if not hits:
             return AnswerResult(
                 answer="I could not find anything in the manuals matching your question.",
@@ -66,9 +74,12 @@ class MultimodalAnswerer:
         user_text = build_user_message(query, chunks_block)
         image_blocks, used_images = self._image_blocks(hits)
 
+        history_messages = self._history_messages(history or [])
+
         log.info("answer.call",
                  model=self._model, hits=len(hits),
                  images_attached=len(image_blocks),
+                 history_turns=len(history_messages),
                  prompt_chars=len(user_text))
 
         try:
@@ -76,6 +87,7 @@ class MultimodalAnswerer:
                 model=self._model,
                 messages=[
                     {"role": "system", "content": ANSWER_SYSTEM_PROMPT},
+                    *history_messages,
                     {
                         "role": "user",
                         "content": [
@@ -149,3 +161,31 @@ class MultimodalAnswerer:
         """Pull [FIGURE: <id>] references the model produced from its answer."""
         import re
         return re.findall(r"\[FIGURE:\s*([A-Za-z0-9_\-]+)\s*\]", text)
+
+    @staticmethod
+    def _history_messages(history: list[tuple[str, str]]) -> list[dict]:
+        """Convert (role, content) tuples to OpenAI Chat Completions messages.
+
+        Strips [FIGURE: id] markers from past assistant text — without the
+        actual image attached, those references would lead the model to
+        hallucinate "as shown in figure X" claims. Same for citation [N]
+        brackets on prior turns (different retrieval set this turn).
+        """
+        import re
+        out: list[dict] = []
+        marker_re = re.compile(r"\[FIGURE:\s*[A-Za-z0-9_\-]+\s*\]")
+        cite_re = re.compile(r"\[\d+\]")
+        for role, content in history:
+            if role not in ("user", "assistant"):
+                continue
+            text = (content or "").strip()
+            if not text:
+                continue
+            if role == "assistant":
+                text = marker_re.sub("", text)
+                text = cite_re.sub("", text)
+                text = re.sub(r"\n{3,}", "\n\n", text).strip()
+                if not text:
+                    continue
+            out.append({"role": role, "content": text})
+        return out

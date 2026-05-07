@@ -1,4 +1,4 @@
-"""HTTP routes: /health, /retrieve, /answer, /feedback, /api/images/{id}, /api/pdfs/{id}."""
+"""HTTP routes: /health, /retrieve, /answer, /feedback, /api/images/{id}, /api/pdfs/{id}, /api/chats."""
 from __future__ import annotations
 
 import time
@@ -21,8 +21,12 @@ from ragqa.api.schemas import (
     AnswerImage,
     AnswerRequest,
     AnswerResponse,
+    ChatPutRequest,
+    ChatRecord,
+    ChatSummary,
     FeedbackRequest,
     HealthResponse,
+    HistoryTurn,
     RetrieveRequest,
     RetrieveResponse,
 )
@@ -31,6 +35,7 @@ from ragqa.core.logging import get_logger
 from ragqa.generation.llm import MultimodalAnswerer
 from ragqa.retrieval.hybrid import HybridRetriever
 from ragqa.retrieval.vectorstore import PineconeVectorStore
+from ragqa.storage import ChatStoreUnavailable, get_chat_store
 
 log = get_logger(__name__)
 router = APIRouter()
@@ -220,8 +225,33 @@ def answer(
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
 
+    # Corpus-coverage gate: AKS / Operator Dashboard topics aren't documented
+    # in our manuals. Refuse cleanly before retrieval so the LLM is never
+    # tempted to fabricate a workflow from adjacent chart-display features.
+    if _looks_like_aks_topic(body.query):
+        log.info("answer.refused.aks_topic", request_id=request_id, query=body.query[:120])
+        return _aks_refusal_response(body.query, t0)
+
+    # History relevance gate: drop prior turns when the new query is on a
+    # different topic (token overlap below threshold AND no follow-up prefix).
+    # When kept, also prepend the most recent user turn to the retrieval
+    # query so embeddings see the full subject for follow-ups like
+    # "what about step 3?".
+    keep_history = _should_keep_history(body.query, body.history)
+    retrieval_query = body.query
+    if keep_history and body.history:
+        prior_user = next(
+            (h.content for h in reversed(body.history) if h.role == "user"),
+            "",
+        )
+        if prior_user:
+            retrieval_query = f"{prior_user.strip()}\n{body.query}"
+    if not keep_history and body.history:
+        log.info("answer.history.dropped", request_id=request_id,
+                 history_turns=len(body.history), query=body.query[:120])
+
     hits = retriever.retrieve(
-        query=body.query,
+        query=retrieval_query,
         top_k=body.top_k,
         rerank_top_k=body.rerank_top_k,
         alpha=body.alpha,
@@ -272,15 +302,19 @@ def answer(
     if body.max_images is not None:
         answerer._max_images = body.max_images  # noqa: SLF001 (knob override)
 
-    result = answerer.answer(query=body.query, hits=hits)
+    history_pairs = (
+        [(t.role, t.content) for t in (body.history or [])]
+        if keep_history else []
+    )
+    result = answerer.answer(query=body.query, hits=hits, history=history_pairs)
 
     citations = [
         AnswerCitation(
             chunk_id=h.chunk.chunk_id,
             doc_id=h.chunk.doc_id,
             section_path=h.chunk.section_path,
-            page_start=h.chunk.page_start,
-            page_end=h.chunk.page_end,
+            page_start=_printed_page(h.chunk.doc_id, h.chunk.page_start),
+            page_end=_printed_page(h.chunk.doc_id, h.chunk.page_end),
         )
         for h in hits
     ]
@@ -288,7 +322,7 @@ def answer(
         AnswerImage(
             image_id=img.image_id,
             cdn_url=img.cdn_url or f"/api/images/{img.image_id}",
-            page=img.page,
+            page=_printed_page(h.chunk.doc_id, img.page),
             caption=img.caption,
             alt_text=img.alt_text,
             chunk_id=h.chunk.chunk_id,
@@ -386,3 +420,234 @@ def serve_pdf(
 
 def _is_safe_id(image_id: str) -> bool:
     return all(c.isalnum() or c in ("_", "-") for c in image_id) and len(image_id) <= 200
+
+
+# ---------------------------------------------------------------------------
+# Corpus-coverage gate for AKS / Operator Dashboard topics.
+#
+# The QAman / QATutor / QASetup corpus contains zero documentation for
+# Alarms, Operator Dashboard, Dashboard Designer, alarm acknowledgement, or
+# "out of service" notifications — those belong to the NWA Analytics
+# Knowledge Suite (AKS) module. Without an explicit gate the bot retrieves
+# adjacent chart-display features (External Source Data Filters, Hide Points
+# with Events, Default Chart Limits) and confidently fabricates a workflow.
+# This gate short-circuits before retrieval/LLM and returns a clean refusal.
+# ---------------------------------------------------------------------------
+
+_AKS_REFUSAL = (
+    "I couldn't find documentation for this in the NWA Quality Analyst "
+    "manuals. Alarms, the Operator Dashboard, and Dashboard Designer are "
+    "part of NWA Analytics Knowledge Suite (AKS), which uses separate "
+    "documentation. If you're trying to do something in standalone Quality "
+    "Analyst (charts, limits, ACCA), please rephrase. Otherwise, please "
+    "consult AKS documentation or your administrator."
+)
+
+# Strict tokens — any hit refuses immediately. Word boundaries are mandatory
+# so legitimate SPC vocabulary (e.g. "alarm limit") is not blocked unless
+# the rest of the query is also AKS-flavored (handled by the soft tokens
+# below).
+_AKS_STRICT_RE = _re.compile(
+    r"\b("
+    r"operator\s+dashboard|"
+    r"dashboard\s+designer|"
+    r"dashboard\s+alarm[s]?|"
+    r"alarm\s+priority|"
+    r"alarm\s+history|"
+    r"alarm\s+for\b|"          # "alarm for" — Dashboard Designer setting
+    r"point\s+list|"
+    r"shift\s+summary"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+# Soft tokens — only refuse when a "dashboard" word appears together with an
+# alarm/acknowledge concept, or when "out of service" appears next to an
+# instrument/tag word. Keeps "alarm limit" SPC questions answering normally.
+_AKS_DASH_RE = _re.compile(r"\bdashboard[s]?\b", _re.IGNORECASE)
+_AKS_ALARM_RE = _re.compile(r"\balarm[s]?\b", _re.IGNORECASE)
+_AKS_ACK_RE = _re.compile(r"\back(?:nowledge(?:d|ment)?|nowledg)?\b|\back\b", _re.IGNORECASE)
+_AKS_OOS_RE = _re.compile(
+    r"\bout\s+of\s+service\b.*?\b(instrument|tag|alarm|sensor)\b"
+    r"|\b(instrument|tag|alarm|sensor)\b.*?\bout\s+of\s+service\b",
+    _re.IGNORECASE | _re.DOTALL,
+)
+
+
+def _looks_like_aks_topic(query: str) -> bool:
+    if _AKS_STRICT_RE.search(query):
+        return True
+    has_dash = bool(_AKS_DASH_RE.search(query))
+    has_alarm = bool(_AKS_ALARM_RE.search(query))
+    has_ack = bool(_AKS_ACK_RE.search(query))
+    if has_dash and (has_alarm or has_ack):
+        return True
+    if _AKS_OOS_RE.search(query):
+        return True
+    return False
+
+
+def _aks_refusal_response(query: str, started_at: float) -> AnswerResponse:
+    return AnswerResponse(
+        query=query,
+        answer=_AKS_REFUSAL,
+        citations=[], images=[], referenced_image_ids=[], chunks=[],
+        is_refusal=True,
+        input_tokens=0, output_tokens=0,
+        latency_ms=int((time.perf_counter() - started_at) * 1000),
+    )
+
+
+# ---------------------------------------------------------------------------
+# History relevance gate — drop prior turns when the new query is on a
+# different topic. Uses a cheap Jaccard overlap between the current query
+# tokens and the union of the last two user turns. Explicit follow-up
+# starters bypass the gate so "what about step 3?" still works.
+# ---------------------------------------------------------------------------
+
+_STOPWORDS = frozenset(
+    "a an the and or but if then so to of in on at by for with about as is "
+    "are was were be been being do does did how why what when where which "
+    "who whom that this these those i you we they it me my your our their "
+    "can could should would will may might shall must have has had not no "
+    "yes from into out up down over under between during before after also "
+    "any all some each every other another more most less few many much".split()
+)
+_FOLLOWUP_STARTERS = (
+    "what about", "and ", "and?", "also ", "also,", "then ", "then,",
+    "now ", "now,", "next ", "next,", "what's", "whats", "tell me more",
+)
+_HISTORY_KEEP_THRESHOLD = 0.20
+
+
+def _tokenize_for_overlap(text: str) -> set[str]:
+    """Lowercase, drop AKS markers + stopwords, simple suffix-strip."""
+    s = text or ""
+    s = _re.sub(r"\[FIGURE:\s*[A-Za-z0-9_\-]+\s*\]", "", s)
+    s = _re.sub(r"\[\d+\]", "", s)
+    raw = _re.findall(r"[A-Za-z][A-Za-z0-9_]+", s.lower())
+    out: set[str] = set()
+    for t in raw:
+        if t in _STOPWORDS:
+            continue
+        # very simple stem so "charts" and "chart" overlap
+        for suffix in ("ies", "es", "s", "ing", "ed"):
+            if len(t) > len(suffix) + 2 and t.endswith(suffix):
+                t = t[: -len(suffix)]
+                break
+        if len(t) >= 3:
+            out.add(t)
+    return out
+
+
+def _should_keep_history(
+    current_query: str,
+    history: list[HistoryTurn] | None,
+) -> bool:
+    if not history:
+        return False
+    q_lower = (current_query or "").strip().lower()
+    if any(q_lower.startswith(p) for p in _FOLLOWUP_STARTERS):
+        return True
+    cur = _tokenize_for_overlap(current_query)
+    if not cur:
+        return False
+    prior_user_tokens: set[str] = set()
+    seen = 0
+    for turn in reversed(history):
+        if turn.role != "user":
+            continue
+        prior_user_tokens |= _tokenize_for_overlap(turn.content)
+        seen += 1
+        if seen >= 2:
+            break
+    if not prior_user_tokens:
+        return False
+    overlap = len(cur & prior_user_tokens) / max(1, len(cur | prior_user_tokens))
+    return overlap >= _HISTORY_KEEP_THRESHOLD
+
+
+# ---------------------------------------------------------------------------
+# Page-number offset between PyMuPDF/Docling 1-based PDF indices (what we
+# store on chunks at ingestion time) and the printed page number shown in
+# the manual's footer (what users actually see and search by). Verified by
+# spot-checking footers across each PDF:
+#
+#   QAman.cleaned.pdf   PDF p.14  ↔ printed p.1     -> +13
+#   QAtutor.cleaned.pdf PDF p.5   ↔ printed p.2     -> +3
+#   QAsetup.cleaned.pdf PDF p.5   ↔ printed p.5     -> 0
+#
+# Constants verified at multiple positions in QAman (chapters 1/2/3/9 and
+# Appendix I), so a single offset is safe as a stopgap. The proper fix is
+# to extract the printed page number from each PDF page footer at ingestion
+# time and store both pdf_page and printed_page on the chunk — tracked as a
+# follow-up below.
+# TODO: replace with per-page printed_page extracted at ingestion time.
+# ---------------------------------------------------------------------------
+
+_DOC_PAGE_OFFSET: dict[str, int] = {
+    "qaman":   13,
+    "qatutor": 3,
+    "qasetup": 0,
+}
+
+
+def _printed_page(doc_id: str, raw: int) -> int:
+    """Convert 1-based PDF index to printed manual page number."""
+    return max(1, int(raw) - _DOC_PAGE_OFFSET.get((doc_id or "").lower(), 0))
+
+
+# --- Chat history endpoints ----------------------------------------------
+
+def _chat_store_or_503():
+    try:
+        return get_chat_store()
+    except ChatStoreUnavailable as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="chat history not configured",
+        ) from e
+
+
+@router.get("/api/chats", response_model=list[ChatSummary], tags=["chats"])
+def list_chats(limit: int | None = None) -> list[ChatSummary]:
+    store = _chat_store_or_503()
+    rows = store.list_recent(limit=limit)
+    return [ChatSummary(**r) for r in rows]
+
+
+@router.get("/api/chats/{chat_id}", response_model=ChatRecord, tags=["chats"])
+def get_chat(chat_id: str) -> ChatRecord:
+    if not _is_safe_id(chat_id):
+        raise HTTPException(status_code=400, detail="invalid chat id")
+    store = _chat_store_or_503()
+    item = store.get(chat_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="chat not found")
+    return ChatRecord(**item)
+
+
+@router.put("/api/chats/{chat_id}", response_model=ChatRecord, tags=["chats"])
+def upsert_chat(chat_id: str, body: ChatPutRequest) -> ChatRecord:
+    if not _is_safe_id(chat_id):
+        raise HTTPException(status_code=400, detail="invalid chat id")
+    store = _chat_store_or_503()
+    record = store.put({
+        "id":         chat_id,
+        "title":      body.title,
+        "turns":      body.turns,
+        "doc_filter": body.doc_filter,
+        "created_at": body.created_at,
+    })
+    log.info("chats.upsert", chat_id=chat_id, turns=len(body.turns))
+    return ChatRecord(**record)
+
+
+@router.delete("/api/chats/{chat_id}", tags=["chats"])
+def delete_chat(chat_id: str) -> JSONResponse:
+    if not _is_safe_id(chat_id):
+        raise HTTPException(status_code=400, detail="invalid chat id")
+    store = _chat_store_or_503()
+    store.delete(chat_id)
+    log.info("chats.delete", chat_id=chat_id)
+    return JSONResponse({"ok": True})

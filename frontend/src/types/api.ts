@@ -94,3 +94,27 @@ export interface HealthResponse {
   indexed_chunks: number;
   indexed_vectors: number;
 }
+
+export interface ChatSummary {
+  id: string;
+  title: string;
+  updated_at: number;
+  created_at: number;
+  doc_filter: string[];
+}
+
+export interface ChatRecord extends ChatSummary {
+  turns: unknown[];
+}
+
+export interface ChatPutRequest {
+  title?: string;
+  turns: unknown[];
+  doc_filter: string[];
+  created_at?: number;
+}
+
+export interface HistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}

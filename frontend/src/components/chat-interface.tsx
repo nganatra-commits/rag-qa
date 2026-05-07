@@ -8,8 +8,14 @@ import { AssistantMessage } from "@/components/message";
 import { Citations } from "@/components/citation";
 import { cn, formatLatency, formatTokens } from "@/lib/utils";
 import { backend } from "@/lib/api";
-import type { AnswerResponse } from "@/types/api";
+import type { AnswerResponse, HistoryTurn } from "@/types/api";
 import type { StoredTurn } from "@/lib/chat-history";
+
+/** Max prior turns to include in the LLM context. Each is a few hundred
+ * tokens at worst, so 8 keeps follow-up coherence without blowing tokens. */
+const HISTORY_TURN_LIMIT = 8;
+/** Trim past assistant answers to this many chars to keep input cheap. */
+const HISTORY_CHAR_BUDGET = 1500;
 
 export type Turn = StoredTurn;
 
@@ -87,6 +93,7 @@ export function ChatInterface({
         // When images are off, don't send any to the LLM (saves tokens) AND
         // hide on render. We only need the chunk text.
         max_images: turnImagesEnabled ? undefined : 0,
+        history: buildHistory(turns),
       });
       setTurns((t) => [
         ...t,
@@ -313,6 +320,35 @@ function TurnView({ turn }: { turn: Turn }) {
       </div>
     </div>
   );
+}
+
+/** Build the prior-turn context the backend feeds to the LLM. We only ship
+ * role + plain text — drop images, citation [N] markers, and the [FIGURE: id]
+ * tags, since past assistant turns referenced a different retrieval set. */
+function buildHistory(turns: Turn[]): HistoryTurn[] {
+  const out: HistoryTurn[] = [];
+  for (const t of turns) {
+    if (t.role === "user") {
+      out.push({ role: "user", content: t.content });
+    } else if (t.role === "assistant") {
+      const text = (t.data?.answer ?? "")
+        .replace(/\[FIGURE:\s*[A-Za-z0-9_\-]+\s*\]/g, "")
+        .replace(/\[\d+\]/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+      if (text) {
+        out.push({
+          role: "assistant",
+          content: text.length > HISTORY_CHAR_BUDGET
+            ? text.slice(0, HISTORY_CHAR_BUDGET) + "…"
+            : text,
+        });
+      }
+    }
+    // Skip "error" turns — never useful as context.
+  }
+  // Most recent N turns only, oldest-first.
+  return out.slice(-HISTORY_TURN_LIMIT);
 }
 
 function Avatar({ role }: { role: "user" | "assistant" }) {

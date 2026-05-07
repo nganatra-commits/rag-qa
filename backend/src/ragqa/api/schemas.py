@@ -4,9 +4,21 @@ The frontend mirrors these in src/types/api.ts. Keep them simple and stable.
 """
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from ragqa.models.chunks import Chunk, RetrievalHit
+
+
+class HistoryTurn(BaseModel):
+    """One prior conversational turn, fed back to the LLM for context.
+
+    Only role+content — no images, citations, or metadata. Past assistant
+    text is enough for the model to resolve "step 3" → "step 3 of installer."
+    """
+    role: Literal["user", "assistant"]
+    content: str = Field(..., max_length=8000)
 
 
 class HealthResponse(BaseModel):
@@ -39,6 +51,9 @@ class AnswerRequest(BaseModel):
     alpha: float | None = Field(default=None, ge=0.0, le=1.0)
     doc_filter: list[str] | None = None
     max_images: int | None = Field(default=None, ge=0, le=8)
+    # Prior turns from the same chat session, oldest first. Capped on the
+    # backend; the frontend trims to a small window before sending.
+    history: list[HistoryTurn] | None = None
 
 
 class AnswerImage(BaseModel):
@@ -77,3 +92,27 @@ class FeedbackRequest(BaseModel):
     request_id: str
     rating: int = Field(..., ge=-1, le=1)  # -1 thumbs down, 1 thumbs up, 0 neutral
     note: str = Field(default="", max_length=2000)
+
+
+# --- Chat history ---------------------------------------------------------
+
+class ChatSummary(BaseModel):
+    """Lightweight metadata for the sidebar list (no turn payloads)."""
+    id: str
+    title: str
+    updated_at: int  # epoch ms
+    created_at: int
+    doc_filter: list[str] = []
+
+
+class ChatRecord(ChatSummary):
+    """Full chat record with the turn list. `turns` is opaque to the backend
+    (frontend-defined StoredTurn shape), so we keep it as a free-form list."""
+    turns: list[dict] = []
+
+
+class ChatPutRequest(BaseModel):
+    title: str | None = None
+    turns: list[dict] = []
+    doc_filter: list[str] = []
+    created_at: int | None = None  # honored on first write only

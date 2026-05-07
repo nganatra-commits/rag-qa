@@ -4,7 +4,11 @@
  */
 import type {
   AnswerResponse,
+  ChatPutRequest,
+  ChatRecord,
+  ChatSummary,
   HealthResponse,
+  HistoryTurn,
   RetrieveResponse,
 } from "@/types/api";
 
@@ -48,6 +52,7 @@ export const backend = {
     alpha?: number;
     doc_filter?: string[];
     max_images?: number;
+    history?: HistoryTurn[];
   }) =>
     callBackend<AnswerResponse>("/answer", {
       method: "POST",
@@ -58,5 +63,24 @@ export const backend = {
     callBackend<{ ok: boolean }>("/feedback", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+
+  // --- Chat history (server-side, DynamoDB-backed) ---
+  listChats: (limit?: number) =>
+    callBackend<ChatSummary[]>(
+      `/api/chats${limit ? `?limit=${limit}` : ""}`
+    ),
+
+  getChat: (id: string) => callBackend<ChatRecord>(`/api/chats/${encodeURIComponent(id)}`),
+
+  upsertChat: (id: string, body: ChatPutRequest) =>
+    callBackend<ChatRecord>(`/api/chats/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  deleteChat: (id: string) =>
+    callBackend<{ ok: boolean }>(`/api/chats/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     }),
 };
