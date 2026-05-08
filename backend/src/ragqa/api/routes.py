@@ -34,6 +34,7 @@ from ragqa.config import Settings, get_settings
 from ragqa.core.logging import get_logger
 from ragqa.generation.llm import MultimodalAnswerer
 from ragqa.retrieval.hybrid import HybridRetriever
+from ragqa.retrieval.query_rewriter import expand_query
 from ragqa.retrieval.vectorstore import PineconeVectorStore
 from ragqa.storage import ChatStoreUnavailable, get_chat_store
 
@@ -250,12 +251,18 @@ def answer(
         log.info("answer.history.dropped", request_id=request_id,
                  history_turns=len(body.history), query=body.query[:120])
 
+    # Multi-query expansion: ask a fast LLM for 2–3 alternative phrasings
+    # that use manual vocabulary. The rewriter is LRU-cached per query so
+    # repeats are free. Falls back to single-query retrieval on any error.
+    expanded = expand_query(retrieval_query)
+
     hits = retriever.retrieve(
         query=retrieval_query,
         top_k=body.top_k,
         rerank_top_k=body.rerank_top_k,
         alpha=body.alpha,
         doc_filter=body.doc_filter,
+        expanded_queries=expanded,
     )
     # Strip blank/uniform images from each hit's chunk before they reach
     # the LLM and the response payload. Same Chunk objects come from the

@@ -48,8 +48,15 @@ aws ecr get-login-password --region "$REGION" \
   | docker login --username AWS --password-stdin "${ECR_URL%/*}"
 
 # 2. Build (using the production Dockerfile)
+# --provenance=false --sbom=false: skip the buildx attestation step. On
+# Docker Desktop / Windows it has hung repeatedly during the post-build
+# "unpack to local store" phase, with the buildx instance becoming
+# unresponsive for hours. We don't ship attestations so disabling them
+# costs us nothing and avoids the hang.
 echo "==> docker build"
 docker build \
+  --provenance=false \
+  --sbom=false \
   -f "$REPO_ROOT/backend/Dockerfile.prod" \
   -t "${ECR_URL}:${TAG}" \
   "$REPO_ROOT/backend"

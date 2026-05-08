@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     chats_region: str = "us-east-1"
     chats_max_list: int = 50
 
+    # --- Query rewriting / expansion (multi-query retrieval) ---
+    # Disable to skip the rewrite call and fall back to single-query retrieval.
+    query_rewrite_enabled: bool = True
+    query_rewrite_model: str = "gpt-4o-mini"
+
     # --- Observability ---
     log_level: str = "INFO"
     log_json: bool = False
