@@ -486,8 +486,13 @@ def _looks_like_aks_topic(query: str) -> bool:
         return True
     has_dash = bool(_AKS_DASH_RE.search(query))
     has_alarm = bool(_AKS_ALARM_RE.search(query))
-    has_ack = bool(_AKS_ACK_RE.search(query))
-    if has_dash and (has_alarm or has_ack):
+    # Note: we deliberately do NOT refuse on `dashboard + acknowledge`.
+    # "Acknowledge" in the QA corpus also refers to Assignable Cause /
+    # Corrective Action workflow (a real core-QA feature) — refusing
+    # would block legitimate ACCA questions. We rely on the LLM-side
+    # Rule 1 to disambiguate ambiguous queries when the gate doesn't
+    # fire here.
+    if has_dash and has_alarm:
         return True
     if _AKS_OOS_RE.search(query):
         return True
