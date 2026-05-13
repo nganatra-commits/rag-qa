@@ -49,6 +49,52 @@ Rules:
 - Do not invent product names. Stick to NWA QA / Quality Analyst.
 - Do not add commentary outside the JSON.
 
+**Special-case vocabulary you should reach for** (these surface chunks
+the literal user query often misses):
+
+- For "X is not updating / not refreshing / I don't see new data" type
+  troubleshooting questions on charts or connected Data Sets, include
+  one phrasing about diagnostics: "QAConnectivity.log database
+  connection diagnostic", "Data > Query Database refresh connected Data
+  Set", "Variable Parameters Data Ranges analysis row range".
+
+- For "out-of-control" + "acknowledge" / "annotate" type questions,
+  include: "Assignable Cause Corrective Action ACCA right-click data
+  point", "Enter/Edit Cause and Action plotting symbol".
+
+- For "ACCA list not visible" / "hyperlink to QA file ACCA" questions,
+  include: "ACCA category configured Settings variable assignment key
+  columns", "KnowledgeBase Acknowledgements destination Data Set".
+
+- For "tag" / "exclude one point" / "remove out-of-control point from
+  limit calculation" questions, include: "Tag Data Ctrl+T Edit menu
+  individual cell", "Tagged Data Handling Treat as Missing Plot but
+  Don't Analyze".
+
+- For "automate" / "schedule" / "batch" type questions, include:
+  "Run file commands script automation", "Task Scheduler run file
+  Windows".
+
+- For "data from Excel" / "import XLSX" / "load spreadsheet" /
+  "load CSV" / "Excel into QA" type questions, surface BOTH the
+  preferred connected path AND the CSV fallback: "Create Connected
+  Data Set External Database Setup Excel ODBC", "Import CSV
+  Utilities menu Editor", "Connection list Access Excel ODBC driver".
+
+- For "why doesn't sigma / 3-sigma match standard deviation" /
+  "standard deviation different on chart vs stats" questions,
+  include: "control chart sigma calculation method average subgroup
+  range AIAG", "Capability Parameters Standard Deviation Calculation
+  Method Sample N-1", "within-subgroup vs between-subgroup
+  variation".
+
+- For "histogram statistics missing" / "histogram doesn't show
+  stat X" / "histogram doesn't calculate" questions, surface BOTH
+  the per-variable and global surfaces: "Histogram Statistics tab
+  Process Capability Histogram Parameters footer per-variable",
+  "Settings histogram default statistics global Maximum Footer
+  Lines".
+
 Examples:
 
 User: "How do I show DATE on my charts?"
@@ -57,8 +103,26 @@ User: "How do I show DATE on my charts?"
 User: "How do I automate charting?"
 {"queries": ["Run files automate chart generation", "create charts via Run file script", "Run file commands for charts"]}
 
+User: "How do I get data from Excel into QA and create a chart?"
+{"queries": ["Create Connected Data Set External Database Setup Excel ODBC", "Import CSV Utilities Editor Quality Analyst", "connect to Excel spreadsheet Quality Analyst chart"]}
+
+User: "Why doesn't 3 sigma match Standard deviation?"
+{"queries": ["control chart sigma average subgroup range AIAG", "Capability Parameters Standard Deviation Calculation Method", "within-subgroup vs between-subgroup variation N-1"]}
+
+User: "The histogram doesn't calculate some statistics I want"
+{"queries": ["Process Capability Histogram Parameters Histogram Statistics tab footer", "Settings histogram default statistics global Maximum Footer Lines", "per-variable histogram statistics selection"]}
+
 User: "remove out-of-control point from limit calculation"
 {"queries": ["tag data point exclude from limit calculation", "Tagged Data Handling treat as missing", "Ctrl+T tag data exclude analysis"]}
+
+User: "Why is my dashboard not refreshing?"
+{"queries": ["Query Database refresh connected Data Set", "QAConnectivity.log database connection diagnostic", "regenerate chart Graphics Viewer Variable tab"]}
+
+User: "I used the hyperlink in the chart but I don't see my ACCA list"
+{"queries": ["ACCA category Settings variable assignment hyperlink", "KnowledgeBase Acknowledgements destination Data Set", "key columns assignable cause persist"]}
+
+User: "Why out-of-control still showing as not acknowledged?"
+{"queries": ["Enter/Edit Cause and Action right-click data point", "Assignable Cause Corrective Action ACCA assign", "plotting symbol annotated point"]}
 """
 
 
