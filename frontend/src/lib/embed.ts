@@ -78,6 +78,9 @@ function getAllowedOrigins(): string[] | "*" {
     .filter(Boolean);
 }
 
+/** Keys reserved by the protocol — they never become host context. */
+const PROTOCOL_KEYS = new Set(["type", "context", "query"]);
+
 export function installEmbedListener(
   onMessage: (msg: IncomingEmbedMessage) => void
 ): () => void {
@@ -87,18 +90,36 @@ export function installEmbedListener(
     if (allowed !== "*" && !allowed.includes(event.origin)) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
-    const type = (data as { type?: unknown }).type;
+    const obj = data as Record<string, unknown>;
+    const type = obj.type;
+
     if (type === "SET_CONTEXT") {
-      const ctx = (data as { context?: unknown }).context;
+      // Two accepted shapes:
+      //   { type: "SET_CONTEXT", context: { k: v, ... } }    (nested)
+      //   { type: "SET_CONTEXT", k1: v1, k2: v2, query?: x } (flat — Insights' shape)
+      // For the flat shape, all string-valued siblings (except protocol keys)
+      // become context; if a `query` field is present, also emit an ASK.
+      const safe: Record<string, string> = {};
+      const ctx = obj.context;
       if (ctx && typeof ctx === "object") {
-        const safe: Record<string, string> = {};
         for (const [k, v] of Object.entries(ctx as Record<string, unknown>)) {
           if (typeof v === "string") safe[k] = v;
         }
+      } else {
+        for (const [k, v] of Object.entries(obj)) {
+          if (PROTOCOL_KEYS.has(k)) continue;
+          if (typeof v === "string") safe[k] = v;
+        }
+      }
+      if (Object.keys(safe).length > 0) {
         onMessage({ type: "SET_CONTEXT", context: safe });
       }
+      const q = obj.query;
+      if (typeof q === "string" && q.trim()) {
+        onMessage({ type: "ASK", query: q });
+      }
     } else if (type === "ASK") {
-      const q = (data as { query?: unknown }).query;
+      const q = obj.query;
       if (typeof q === "string" && q.trim()) {
         onMessage({ type: "ASK", query: q });
       }
