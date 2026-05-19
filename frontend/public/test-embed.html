@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>rag-qa embed test harness</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; }
+    body { margin: 0; padding: 16px; background: #f4f4f5; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    .row { display: flex; gap: 12px; align-items: stretch; height: calc(100vh - 80px); }
+    .controls { width: 320px; background: #fff; border: 1px solid #e4e4e7; border-radius: 8px; padding: 12px; overflow: auto; }
+    .frame-wrap { flex: 1; background: #fff; border: 1px solid #e4e4e7; border-radius: 8px; overflow: hidden; }
+    iframe { width: 100%; height: 100%; border: 0; }
+    fieldset { border: 1px solid #e4e4e7; border-radius: 6px; padding: 8px; margin: 0 0 10px; }
+    legend { font-size: 12px; font-weight: 600; padding: 0 4px; color: #52525b; }
+    label { font-size: 12px; display: block; margin: 6px 0 2px; color: #3f3f46; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d4d4d8; border-radius: 4px; font-family: inherit; font-size: 13px; }
+    button { padding: 6px 10px; border: 1px solid #18181b; background: #18181b; color: #fff; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    button.secondary { background: #fff; color: #18181b; }
+    .events { font-family: ui-monospace, monospace; font-size: 11px; background: #18181b; color: #d4d4d8; padding: 8px; border-radius: 4px; max-height: 240px; overflow: auto; white-space: pre-wrap; }
+    .muted { color: #71717a; font-size: 11px; margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>rag-qa embed test harness</h1>
+  <div class="row">
+    <div class="controls">
+      <fieldset>
+        <legend>Load iframe</legend>
+        <label>Initial query (?q=)</label>
+        <input id="q" value="What is RAG?" />
+        <label>Host context (key=value, one per line)</label>
+        <textarea id="ctx" rows="3">enterprise=PlantA
+page=operations</textarea>
+        <label><input type="checkbox" id="autosubmit" checked /> auto-submit</label>
+        <div style="margin-top:8px;">
+          <button onclick="reloadFrame()">Reload iframe</button>
+          <button class="secondary" onclick="reloadFrame(true)">Reload (no ?q=)</button>
+        </div>
+        <p class="muted">Frame src is rebuilt from these fields.</p>
+      </fieldset>
+      <fieldset>
+        <legend>postMessage to iframe</legend>
+        <label>SET_CONTEXT (key=value per line)</label>
+        <textarea id="newctx" rows="3">enterprise=PlantB
+page=alarms</textarea>
+        <button onclick="sendSetContext()">SET_CONTEXT</button>
+        <hr style="margin:10px 0; border:0; border-top:1px solid #e4e4e7"/>
+        <label>ASK</label>
+        <input id="ask" value="Summarise current alarms" />
+        <button onclick="sendAsk()">ASK</button>
+      </fieldset>
+      <fieldset>
+        <legend>Events from iframe</legend>
+        <div class="events" id="events">(waiting for READY…)</div>
+        <button class="secondary" style="margin-top:6px;" onclick="clearEvents()">clear</button>
+      </fieldset>
+    </div>
+    <div class="frame-wrap">
+      <iframe id="frame"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const FRAME_ORIGIN = window.location.origin; // assumes same-origin; change if serving from another port
+    const frame = document.getElementById("frame");
+    const eventsEl = document.getElementById("events");
+
+    function parseCtx(text) {
+      const out = {};
+      text.split("\n").forEach((line) => {
+        const eq = line.indexOf("=");
+        if (eq > 0) out[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+      });
+      return out;
+    }
+
+    function reloadFrame(stripQuery) {
+      const params = new URLSearchParams();
+      if (!stripQuery) {
+        const q = document.getElementById("q").value.trim();
+        if (q) params.set("q", q);
+        if (!document.getElementById("autosubmit").checked) params.set("autosubmit", "0");
+      }
+      Object.entries(parseCtx(document.getElementById("ctx").value)).forEach(
+        ([k, v]) => params.set(k, v)
+      );
+      frame.src = FRAME_ORIGIN + "/?" + params.toString();
+      logEvent("[host] reloaded iframe: " + frame.src);
+    }
+
+    function sendSetContext() {
+      const ctx = parseCtx(document.getElementById("newctx").value);
+      frame.contentWindow.postMessage({ type: "SET_CONTEXT", context: ctx }, FRAME_ORIGIN);
+      logEvent("[host -> embed] SET_CONTEXT " + JSON.stringify(ctx));
+    }
+
+    function sendAsk() {
+      const q = document.getElementById("ask").value.trim();
+      if (!q) return;
+      frame.contentWindow.postMessage({ type: "ASK", query: q }, FRAME_ORIGIN);
+      logEvent("[host -> embed] ASK " + q);
+    }
+
+    function logEvent(line) {
+      eventsEl.textContent += "\n" + line;
+      eventsEl.scrollTop = eventsEl.scrollHeight;
+    }
+
+    function clearEvents() {
+      eventsEl.textContent = "(cleared)";
+    }
+
+    window.addEventListener("message", (e) => {
+      // In real hosts, validate e.origin strictly.
+      if (e.origin !== FRAME_ORIGIN) return;
+      if (!e.data || typeof e.data !== "object") return;
+      logEvent("[embed -> host] " + JSON.stringify(e.data).slice(0, 400));
+    });
+
+    // initial load
+    reloadFrame();
+  </script>
+</body>
+</html>

@@ -58,9 +58,18 @@ variable "create_secrets" {
 
 # --- CORS ---
 variable "frontend_origin" {
-  description = "The Amplify (or custom-domain) origin allowed to call the backend."
+  description = <<-EOT
+    Comma-separated allowlist of origins permitted to call the backend, passed
+    through to the FastAPI app as RAGQA_CORS_ORIGINS. Include the rag-qa
+    frontend's own origin AND any host that embeds it via iframe (each host
+    runs at its own origin and its iframe issues requests as the rag-qa
+    frontend origin — so only the rag-qa frontend origin is strictly required
+    for plain iframe use, but list any host that calls the backend directly).
+    Example: "https://rag-qa.example.com,https://insights.example.com".
+    Default "*" allows all origins — fine for dev, tighten for prod.
+  EOT
   type        = string
-  default     = "*"  # tighten to your Amplify URL after the frontend is up
+  default     = "*"
 }
 
 # --- Frontend (Amplify) ---

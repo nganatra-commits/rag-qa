@@ -10,6 +10,12 @@ import { cn, formatLatency, formatTokens } from "@/lib/utils";
 import { backend } from "@/lib/api";
 import type { AnswerResponse, BuildInfo, HistoryTurn } from "@/types/api";
 import type { StoredTurn } from "@/lib/chat-history";
+import {
+  buildQueryWithContext,
+  installEmbedListener,
+  postToParent,
+  stripQueryFromUrl,
+} from "@/lib/embed";
 
 /** Max prior turns to include in the LLM context. Each is a few hundred
  * tokens at worst, so 8 keeps follow-up coherence without blowing tokens. */
@@ -40,6 +46,13 @@ interface ChatInterfaceProps {
   setDocFilter: React.Dispatch<React.SetStateAction<string[]>>;
   /** Called when the user clicks "New chat". */
   onNewChat?: () => void;
+  /** Embed: pre-filled question from ?q=. Auto-submitted unless autoSubmit=false. */
+  initialQuery?: string | null;
+  /** Embed: structured key/value context passed from the host. Prepended to each
+   *  outgoing query so the LLM sees it; the user turn UI shows the raw text. */
+  initialContext?: Record<string, string>;
+  /** Embed: when initialQuery is set, fire send() automatically. */
+  autoSubmit?: boolean;
 }
 
 export function ChatInterface({
@@ -51,12 +64,19 @@ export function ChatInterface({
   docFilter,
   setDocFilter,
   onNewChat,
+  initialQuery = null,
+  initialContext,
+  autoSubmit = true,
 }: ChatInterfaceProps) {
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [imagesEnabled, setImagesEnabled] = React.useState<boolean>(true);
   const [build, setBuild] = React.useState<BuildInfo | null>(null);
+  const [hostContext, setHostContext] = React.useState<Record<string, string>>(
+    initialContext ?? {}
+  );
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const didAutoSubmitRef = React.useRef(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -86,9 +106,12 @@ export function ChatInterface({
     });
   }, [turns]);
 
-  const send = async () => {
-    const q = input.trim();
+  const sendWithText = async (rawText: string) => {
+    const q = rawText.trim();
     if (!q || busy) return;
+    // Display the raw question in the UI; only the LLM sees the
+    // host-context-prefixed version. Subsequent turns' history stays clean.
+    const composed = buildQueryWithContext(q, hostContext);
     const userTurn: Turn = { role: "user", content: q, id: crypto.randomUUID() };
     setTurns((t) => [...t, userTurn]);
     setInput("");
@@ -97,7 +120,7 @@ export function ChatInterface({
 
     try {
       const data = await backend.answer({
-        query: q,
+        query: composed,
         doc_filter: docFilter.length ? docFilter : undefined,
         // When images are off, don't send any to the LLM (saves tokens) AND
         // hide on render. We only need the chunk text.
@@ -108,16 +131,48 @@ export function ChatInterface({
         ...t,
         { role: "assistant", data, imagesEnabled: turnImagesEnabled, id: crypto.randomUUID() },
       ]);
+      postToParent({ type: "ANSWER", text: data.answer });
     } catch (err) {
       const message = err instanceof Error ? err.message : "request failed";
       setTurns((t) => [
         ...t,
         { role: "error", message, id: crypto.randomUUID() },
       ]);
+      postToParent({ type: "ERROR", message });
     } finally {
       setBusy(false);
     }
   };
+
+  const send = () => sendWithText(input);
+
+  // Latest sendWithText for the embed listener, which is installed once and
+  // would otherwise capture a stale closure.
+  const sendRef = React.useRef(sendWithText);
+  sendRef.current = sendWithText;
+
+  React.useEffect(() => {
+    const teardown = installEmbedListener((msg) => {
+      if (msg.type === "SET_CONTEXT") {
+        setHostContext(msg.context);
+      } else if (msg.type === "ASK") {
+        void sendRef.current(msg.query);
+      }
+    });
+    postToParent({ type: "READY" });
+    return teardown;
+  }, []);
+
+  React.useEffect(() => {
+    if (didAutoSubmitRef.current) return;
+    if (!initialQuery) return;
+    didAutoSubmitRef.current = true;
+    setInput(initialQuery);
+    if (autoSubmit) {
+      stripQueryFromUrl();
+      void sendRef.current(initialQuery);
+    }
+  }, [initialQuery, autoSubmit]);
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

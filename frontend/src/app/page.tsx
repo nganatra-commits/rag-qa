@@ -11,6 +11,7 @@ import {
   type StoredChat,
 } from "@/lib/chat-history";
 import { backend } from "@/lib/api";
+import { readUrlContext } from "@/lib/embed";
 
 /**
  * Full-page ChatGPT-like layout: persistent left sidebar with the entire
@@ -32,6 +33,11 @@ export default function Page() {
   const [docFilter, setDocFilter] = React.useState<string[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = React.useState(false);
   const hydratedRef = React.useRef(false);
+  // Embed: read URL params once. initialQuery is gated by `embedReady` so
+  // auto-submit fires AFTER any restored chat history is in `turns` — otherwise
+  // we'd send the new question with an empty history.
+  const [embedConfig] = React.useState(() => readUrlContext());
+  const [embedReady, setEmbedReady] = React.useState(false);
   // We avoid fighting the user's edits with a remote refresh while they're
   // typing into a chat — only resync the sidebar list, never the active turns.
 
@@ -90,6 +96,7 @@ export default function Page() {
         syncUrl(fresh);
       }
       hydratedRef.current = true;
+      setEmbedReady(true);
     })();
     return () => {
       cancelled = true;
@@ -222,6 +229,9 @@ export default function Page() {
           setDocFilter={setDocFilter}
           onNewChat={handleNewChat}
           onToggleSidebar={() => setMobileSidebarOpen((v) => !v)}
+          initialQuery={embedReady ? embedConfig.initialQuery : null}
+          initialContext={embedConfig.hostContext}
+          autoSubmit={embedConfig.autoSubmit}
         />
       </div>
     </div>
