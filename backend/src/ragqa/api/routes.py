@@ -1,6 +1,7 @@
 """HTTP routes: /health, /retrieve, /answer, /feedback, /api/images/{id}, /api/pdfs/{id}, /api/chats."""
 from __future__ import annotations
 
+import datetime as _dt
 import time
 import uuid
 from pathlib import Path
@@ -21,6 +22,7 @@ from ragqa.api.schemas import (
     AnswerImage,
     AnswerRequest,
     AnswerResponse,
+    BuildInfo,
     ChatPutRequest,
     ChatRecord,
     ChatSummary,
@@ -40,6 +42,21 @@ from ragqa.storage import ChatStoreUnavailable, get_chat_store
 
 log = get_logger(__name__)
 router = APIRouter()
+
+
+# When this container started. Captured once at import time so every
+# response in this instance reports the same start timestamp.
+_PROCESS_STARTED_AT = _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
+
+
+def _build_info(settings: Settings) -> BuildInfo:
+    return BuildInfo(
+        version=__version__,
+        git_sha=settings.build_git_sha,
+        build_time=settings.build_time,
+        llm_model=settings.llm_model,
+        image_started_at=_PROCESS_STARTED_AT,
+    )
 
 
 # Captions like "solid black square", "blank rectangle", "no visible content"
@@ -166,6 +183,16 @@ def health(
     )
 
 
+@router.get("/version", response_model=BuildInfo, tags=["meta"])
+def version_endpoint(
+    settings: Settings = Depends(get_settings),
+) -> BuildInfo:
+    """Build metadata for this running container. Used by the frontend to
+    display a version pill + per-answer build badge so reviewers can tag
+    analysis notes to a specific deploy."""
+    return _build_info(settings)
+
+
 @router.post("/retrieve", response_model=RetrieveResponse, tags=["rag"],
              dependencies=[Depends(require_api_key)])
 def retrieve(
@@ -222,16 +249,18 @@ def answer(
     body: AnswerRequest,
     retriever: HybridRetriever = Depends(get_retriever),
     answerer: MultimodalAnswerer = Depends(get_answerer),
+    settings: Settings = Depends(get_settings),
 ) -> AnswerResponse:
     t0 = time.perf_counter()
     request_id = str(uuid.uuid4())
+    build = _build_info(settings)
 
     # Corpus-coverage gate: AKS / Operator Dashboard topics aren't documented
     # in our manuals. Refuse cleanly before retrieval so the LLM is never
     # tempted to fabricate a workflow from adjacent chart-display features.
     if _looks_like_aks_topic(body.query):
         log.info("answer.refused.aks_topic", request_id=request_id, query=body.query[:120])
-        return _aks_refusal_response(body.query, t0)
+        return _aks_refusal_response(body.query, t0, build)
 
     # History relevance gate: drop prior turns when the new query is on a
     # different topic (token overlap below threshold AND no follow-up prefix).
@@ -304,6 +333,7 @@ def answer(
             citations=[], images=[], referenced_image_ids=[], chunks=[],
             input_tokens=0, output_tokens=0,
             latency_ms=int((time.perf_counter() - t0) * 1000),
+            build=build,
         )
 
     if body.max_images is not None:
@@ -359,6 +389,7 @@ def answer(
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
         latency_ms=int((time.perf_counter() - t0) * 1000),
+        build=build,
     )
 
 
@@ -499,7 +530,8 @@ def _looks_like_aks_topic(query: str) -> bool:
     return False
 
 
-def _aks_refusal_response(query: str, started_at: float) -> AnswerResponse:
+def _aks_refusal_response(query: str, started_at: float,
+                          build: BuildInfo | None = None) -> AnswerResponse:
     return AnswerResponse(
         query=query,
         answer=_AKS_REFUSAL,
@@ -507,6 +539,7 @@ def _aks_refusal_response(query: str, started_at: float) -> AnswerResponse:
         is_refusal=True,
         input_tokens=0, output_tokens=0,
         latency_ms=int((time.perf_counter() - started_at) * 1000),
+        build=build,
     )
 
 

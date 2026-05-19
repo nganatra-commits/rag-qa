@@ -32,6 +32,14 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install -e .
 
 FROM python:3.12-slim AS runtime
 
+# Build metadata passed in from the build script. Exposed as env vars so the
+# /version endpoint and per-answer response can include them — lets reviewers
+# tag their analysis to a specific deploy.
+ARG BUILD_GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ENV RAGQA_BUILD_GIT_SHA=$BUILD_GIT_SHA \
+    RAGQA_BUILD_TIME=$BUILD_TIME
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONIOENCODING=utf-8 \

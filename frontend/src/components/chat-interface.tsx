@@ -8,7 +8,7 @@ import { AssistantMessage } from "@/components/message";
 import { Citations } from "@/components/citation";
 import { cn, formatLatency, formatTokens } from "@/lib/utils";
 import { backend } from "@/lib/api";
-import type { AnswerResponse, HistoryTurn } from "@/types/api";
+import type { AnswerResponse, BuildInfo, HistoryTurn } from "@/types/api";
 import type { StoredTurn } from "@/lib/chat-history";
 
 /** Max prior turns to include in the LLM context. Each is a few hundred
@@ -55,7 +55,16 @@ export function ChatInterface({
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [imagesEnabled, setImagesEnabled] = React.useState<boolean>(true);
+  const [build, setBuild] = React.useState<BuildInfo | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    backend.version()
+      .then((b) => { if (!cancelled) setBuild(b); })
+      .catch(() => { /* /version unavailable; just hide the pill */ });
+    return () => { cancelled = true; };
+  }, []);
 
   React.useEffect(() => {
     try {
@@ -255,6 +264,14 @@ export function ChatInterface({
             <Send className="size-4" />
           </Button>
         </div>
+        {build && (
+          <div className={cn(
+            "mt-1.5 text-[10px] text-[var(--muted-foreground)]",
+            !isWidget && "max-w-3xl mx-auto"
+          )} title={`built ${build.build_time} · instance started ${build.image_started_at}`}>
+            Build <code>{build.git_sha}</code> · v{build.version} · model <code>{build.llm_model}</code>
+          </div>
+        )}
       </footer>
     </div>
   );
@@ -314,6 +331,17 @@ function TurnView({ turn }: { turn: Turn }) {
             <>
               <span>·</span>
               <span className="italic">images suppressed</span>
+            </>
+          )}
+          {data.build && (
+            <>
+              <span>·</span>
+              <span
+                className="font-mono"
+                title={`built ${data.build.build_time} · model ${data.build.llm_model}`}
+              >
+                build {data.build.git_sha}
+              </span>
             </>
           )}
         </div>

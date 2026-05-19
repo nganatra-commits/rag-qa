@@ -67,6 +67,14 @@ export interface AnswerImage {
   binding_score: number;
 }
 
+export interface BuildInfo {
+  version: string;
+  git_sha: string;
+  build_time: string;
+  llm_model: string;
+  image_started_at: string;
+}
+
 export interface AnswerResponse {
   query: string;
   answer: string;
@@ -78,6 +86,7 @@ export interface AnswerResponse {
   input_tokens: number;
   output_tokens: number;
   latency_ms: number;
+  build?: BuildInfo | null;
 }
 
 export interface RetrieveResponse {

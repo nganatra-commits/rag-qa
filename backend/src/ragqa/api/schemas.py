@@ -30,6 +30,17 @@ class HealthResponse(BaseModel):
     indexed_vectors: int
 
 
+class BuildInfo(BaseModel):
+    """Build metadata baked into the image at docker build time. Surfaced
+    on /version and on each /answer response so reviewers can tag analysis
+    notes with the exact deploy that produced an answer."""
+    version: str           # package version from ragqa.__version__
+    git_sha: str           # short SHA of the commit that was built
+    build_time: str        # ISO-8601 UTC when the image was built
+    llm_model: str         # model in use for /answer (e.g. gpt-4o)
+    image_started_at: str  # ISO-8601 UTC when this container started
+
+
 class RetrieveRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     top_k: int | None = Field(default=None, ge=1, le=50)
@@ -86,6 +97,10 @@ class AnswerResponse(BaseModel):
     input_tokens: int
     output_tokens: int
     latency_ms: int
+    # Build info from the container that produced this answer. Optional
+    # for backwards-compat with old clients; the frontend renders it as a
+    # per-turn badge so reviewers can tag a specific answer to a deploy.
+    build: BuildInfo | None = None
 
 
 class FeedbackRequest(BaseModel):

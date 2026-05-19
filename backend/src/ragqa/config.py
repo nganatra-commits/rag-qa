@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     query_rewrite_enabled: bool = True
     query_rewrite_model: str = "gpt-4o-mini"
 
+    # --- Build metadata (baked into image at docker build time via ARGs) ---
+    # Exposed via /version and on each /answer response so reviewers can
+    # tag analysis notes with the exact build that produced an answer.
+    build_git_sha: str = "unknown"
+    build_time: str = "unknown"
+
     # --- Observability ---
     log_level: str = "INFO"
     log_json: bool = False

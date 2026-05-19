@@ -4,6 +4,7 @@
  */
 import type {
   AnswerResponse,
+  BuildInfo,
   ChatPutRequest,
   ChatRecord,
   ChatSummary,
@@ -32,6 +33,8 @@ async function callBackend<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const backend = {
   health: () => callBackend<HealthResponse>("/health"),
+
+  version: () => callBackend<BuildInfo>("/version"),
 
   retrieve: (body: {
     query: string;

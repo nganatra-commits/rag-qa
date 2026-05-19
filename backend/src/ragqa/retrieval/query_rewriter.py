@@ -71,9 +71,14 @@ the literal user query often misses):
   individual cell", "Tagged Data Handling Treat as Missing Plot but
   Don't Analyze".
 
-- For "automate" / "schedule" / "batch" type questions, include:
-  "Run file commands script automation", "Task Scheduler run file
-  Windows".
+- For "automate" / "automatically" / "auto-create" / "auto-generate"
+  / "schedule" / "batch" type questions about creating charts /
+  histograms / reports / exports, include: "Run file commands script
+  automation chart", "qarf.exe Run File Interpreter syntax",
+  "Run file commands documented chart types". Do NOT include rewrites
+  about "Recalculate each run" or "auto-recalculate parameters" —
+  those are dialog options, not the automation workflow the user
+  wants.
 
 - For "data from Excel" / "import XLSX" / "load spreadsheet" /
   "load CSV" / "Excel into QA" type questions, surface BOTH the
@@ -102,6 +107,12 @@ User: "How do I show DATE on my charts?"
 
 User: "How do I automate charting?"
 {"queries": ["Run files automate chart generation", "create charts via Run file script", "Run file commands for charts"]}
+
+User: "How do I create a histogram automatically?"
+{"queries": ["Run file commands documented histogram", "qarf.exe Run File Interpreter chart commands", "automate chart creation Run file script"]}
+
+User: "How do I automate creating a histogram?"
+{"queries": ["Run file commands documented for histogram chart", "Run File Interpreter qarf.exe usage", "Run file syntax available chart commands"]}
 
 User: "How do I get data from Excel into QA and create a chart?"
 {"queries": ["Create Connected Data Set External Database Setup Excel ODBC", "Import CSV Utilities Editor Quality Analyst", "connect to Excel spreadsheet Quality Analyst chart"]}

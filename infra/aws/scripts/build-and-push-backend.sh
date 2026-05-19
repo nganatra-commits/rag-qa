@@ -53,10 +53,16 @@ aws ecr get-login-password --region "$REGION" \
 # "unpack to local store" phase, with the buildx instance becoming
 # unresponsive for hours. We don't ship attestations so disabling them
 # costs us nothing and avoids the hang.
+BUILD_GIT_SHA="$(cd "$REPO_ROOT" && git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "==> build sha  : $BUILD_GIT_SHA"
+echo "==> build time : $BUILD_TIME"
 echo "==> docker build"
 docker build \
   --provenance=false \
   --sbom=false \
+  --build-arg "BUILD_GIT_SHA=$BUILD_GIT_SHA" \
+  --build-arg "BUILD_TIME=$BUILD_TIME" \
   -f "$REPO_ROOT/backend/Dockerfile.prod" \
   -t "${ECR_URL}:${TAG}" \
   "$REPO_ROOT/backend"
