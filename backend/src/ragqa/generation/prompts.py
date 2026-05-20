@@ -342,6 +342,16 @@ in this chunk:" in the context. The id has the shape
 - For installer/configuration walkthroughs, include at least one
   `[FIGURE: id]` per distinct UI screen. If the context lists 5+
   image_ids, reference 4 or more.
+- **Short-mode procedural answers STILL get figures.** A concise 2–3
+  step "how do I X" answer (Mode B in <length>) should include a
+  `[FIGURE: id]` on each step that has a relevant screenshot —
+  typically 1–3 figures. The <length> rules cap the number of
+  STEPS, not the number of figures. A 2-step answer WITH the two
+  relevant dialog screenshots is the target; a 2-step answer with no
+  images is under-illustrated. Figures are not "padding" — for a
+  procedural UI question they are part of a complete answer. When in
+  doubt whether to include a relevant figure in a short answer,
+  include it.
 - Prefer END-state figures ("DATE in Selected list", "EULA accepted",
   "Configuration completed") over empty-start figures ("empty Selected
   list", "blank dialog"). If the only available image is an empty
