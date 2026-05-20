@@ -98,7 +98,10 @@ class PineconeVectorStore:
         return self._index
 
     def stats(self) -> dict[str, Any]:
-        return self.index.describe_index_stats(namespace=self._namespace)
+        # Pinecone v8's describe_index_stats() no longer accepts a
+        # `namespace` kwarg — it returns stats for all namespaces and the
+        # caller filters. Passing the kwarg raises TypeError.
+        return self.index.describe_index_stats()
 
     def delete_namespace(self) -> None:
         try:
