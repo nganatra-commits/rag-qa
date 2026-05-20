@@ -163,6 +163,10 @@ function InlineImage({
       className={cn(
         "not-prose my-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] overflow-hidden",
         "shadow-sm",
+        // Cap the figure width so small dialog screenshots don't blow up to
+        // the full chat column — a giant low-detail crop is "useless"
+        // (5/20 reviewer). Click still opens the full-size gallery view.
+        "w-fit max-w-sm",
         highlighted && "ring-2 ring-[var(--accent)] ring-offset-1 ring-offset-[var(--muted)]"
       )}
     >
@@ -177,7 +181,7 @@ function InlineImage({
           src={absoluteImageUrl(img.cdn_url)}
           alt={img.alt_text || img.caption || "screenshot"}
           loading="lazy"
-          className="block w-full h-auto"
+          className="block w-auto max-w-full h-auto max-h-[360px] object-contain"
         />
       </button>
       <figcaption className="px-2.5 py-1.5 text-[11px] text-[var(--muted-foreground)] border-t border-[var(--border)] flex items-center gap-2 flex-wrap">
