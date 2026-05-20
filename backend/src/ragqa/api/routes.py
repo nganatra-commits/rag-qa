@@ -155,20 +155,30 @@ def health(
         store = get_store()
         store.ensure_index()
         stats = store.stats()
-        # Pinecone SDK v8 uses camelCase ('vectorCount') in namespace stats; older
-        # API versions used snake_case ('vector_count'). Try both.
-        if hasattr(stats, "namespaces"):
-            ns = stats.namespaces or {}
+        # Pinecone's SDK shape has evolved across versions (plain dict ->
+        # IndexDescription object with NamespacesMap of NamespaceSummary
+        # objects). The simplest robust approach is to normalize to a
+        # plain dict first via to_dict() if available, then access by key.
+        if hasattr(stats, "to_dict"):
+            stats_d = stats.to_dict()
+        elif hasattr(stats, "__dict__"):
+            stats_d = {k: v for k, v in stats.__dict__.items() if not k.startswith("_")}
+        elif isinstance(stats, dict):
+            stats_d = stats
         else:
-            ns = stats.get("namespaces", {}) if isinstance(stats, dict) else {}
-        ns_stats = ns.get(settings.pinecone_namespace) if isinstance(ns, dict) else None
-        if ns_stats is None:
-            indexed_vectors = 0
+            stats_d = {}
+        ns_d = stats_d.get("namespaces") or {}
+        ns_stats = ns_d.get(settings.pinecone_namespace) or {}
+        # Normalize NamespaceSummary -> dict too, in case to_dict() didn't
+        # cascade.
+        if hasattr(ns_stats, "vector_count"):
+            indexed_vectors = int(getattr(ns_stats, "vector_count", 0) or 0)
         elif isinstance(ns_stats, dict):
-            indexed_vectors = int(ns_stats.get("vectorCount") or ns_stats.get("vector_count") or 0)
-        else:
-            indexed_vectors = int(getattr(ns_stats, "vector_count", 0) or
-                                  getattr(ns_stats, "vectorCount", 0) or 0)
+            indexed_vectors = int(
+                ns_stats.get("vector_count")
+                or ns_stats.get("vectorCount")
+                or 0
+            )
         indexed_chunks = indexed_vectors  # 1:1 in our schema
     except Exception as e:
         log.warning("health.index.unavailable", err=repr(e))

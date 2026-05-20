@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Insights iframe embed test — NWA QA Assistant</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; height: 100vh; display: grid; grid-template-rows: auto auto 1fr; }
+  header { padding: .75rem 1rem; background: #1f2a44; color: #fff; }
+  header h1 { margin: 0; font-size: 1rem; }
+  .controls { padding: .75rem 1rem; background: #f3f4f6; border-bottom: 1px solid #d1d5db; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+  .controls input, .controls select, .controls button { font-size: .85rem; padding: .35rem .55rem; border: 1px solid #9ca3af; border-radius: 4px; }
+  .controls input { flex: 1; min-width: 220px; }
+  .controls button { background: #2563eb; color: #fff; border: none; cursor: pointer; }
+  .controls button.secondary { background: #6b7280; }
+  .controls button:hover { filter: brightness(1.08); }
+  .row { display: flex; gap: .5rem; align-items: center; width: 100%; }
+  .row label { font-size: .75rem; opacity: .75; }
+  .frame-wrap { position: relative; }
+  iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+  .log { position: absolute; top: 0; right: 0; max-width: 38%; height: 100%; overflow: auto; background: rgba(15, 23, 42, .92); color: #d1d5db; padding: .5rem; font-family: ui-monospace, monospace; font-size: .72rem; border-left: 2px solid #334155; }
+  .log .entry { border-bottom: 1px dashed #334155; padding: .25rem 0; }
+  .log .entry.outgoing { color: #fbbf24; }
+  .log .entry.incoming { color: #34d399; }
+  .log .entry.error    { color: #f87171; }
+  .log .entry .ts { opacity: .55; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 9999px; background: #334155; color: #e5e7eb; font-size: .7rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>NWA QA Assistant — Insights iframe simulator <span class="pill" id="origin-pill">checking origin…</span></h1>
+</header>
+
+<section class="controls">
+  <div class="row">
+    <label>Iframe&nbsp;URL</label>
+    <input id="iframe-url" value="https://deapmbeeftama.cloudfront.net/" />
+    <select id="autosubmit">
+      <option value="1">autosubmit=1 (default)</option>
+      <option value="0">autosubmit=0 (prefill only)</option>
+    </select>
+    <button id="reload-btn">Open in iframe (URL params)</button>
+  </div>
+  <div class="row">
+    <label>Question</label>
+    <input id="q" value="How do I create a histogram?" />
+    <input id="enterprise" placeholder="enterprise" value="PlantA" style="flex: 0 0 100px" />
+    <input id="serverGroup" placeholder="serverGroup" value="Group1" style="flex: 0 0 100px" />
+    <input id="page" placeholder="page" value="operations" style="flex: 0 0 100px" />
+    <button id="postmsg-btn" class="secondary">Send via postMessage</button>
+    <button id="clear-log-btn" class="secondary">Clear log</button>
+  </div>
+</section>
+
+<div class="frame-wrap">
+  <iframe id="chat" referrerpolicy="no-referrer-when-downgrade" allow="clipboard-read; clipboard-write"></iframe>
+  <div class="log" id="log"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+
+function logEntry(kind, label, payload) {
+  const div = document.createElement("div");
+  div.className = "entry " + kind;
+  const ts = new Date().toLocaleTimeString();
+  div.innerHTML = `<span class="ts">${ts}</span> <strong>${label}</strong> ` +
+                  (payload ? `<pre style="margin:.25rem 0 0 0;white-space:pre-wrap">${JSON.stringify(payload, null, 2)}</pre>` : "");
+  logEl.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+$("origin-pill").textContent = "parent origin: " + window.location.origin;
+
+function buildUrl() {
+  const base = $("iframe-url").value.trim();
+  const url = new URL(base);
+  const q = $("q").value.trim();
+  if (q) url.searchParams.set("q", q);
+  url.searchParams.set("autosubmit", $("autosubmit").value);
+  for (const k of ["enterprise", "serverGroup", "page"]) {
+    const v = $(k).value.trim();
+    if (v) url.searchParams.set(k, v);
+  }
+  return url.toString();
+}
+
+function openInIframe() {
+  const url = buildUrl();
+  logEntry("outgoing", "OPEN URL", url);
+  $("chat").src = url;
+}
+
+function sendPostMessage() {
+  const iframe = $("chat");
+  if (!iframe.src || iframe.src === "about:blank") {
+    logEntry("error", "iframe not loaded yet — click 'Open in iframe' first");
+    return;
+  }
+  const targetOrigin = new URL(iframe.src).origin;
+  const msg = {
+    type: "SET_CONTEXT",
+    query: $("q").value.trim(),
+    enterprise: $("enterprise").value.trim(),
+    serverGroup: $("serverGroup").value.trim(),
+    page: $("page").value.trim(),
+  };
+  logEntry("outgoing", "postMessage SET_CONTEXT + query", msg);
+  iframe.contentWindow.postMessage(msg, targetOrigin);
+}
+
+window.addEventListener("message", (e) => {
+  if (!e.data || typeof e.data !== "object") return;
+  logEntry("incoming", `postMessage from ${e.origin}`, e.data);
+});
+
+$("reload-btn").addEventListener("click", openInIframe);
+$("postmsg-btn").addEventListener("click", sendPostMessage);
+$("clear-log-btn").addEventListener("click", () => { logEl.innerHTML = ""; });
+
+// Auto-load on first open with the default URL so the demo "just works"
+openInIframe();
+</script>
+</body>
+</html>

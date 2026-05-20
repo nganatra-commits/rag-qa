@@ -44,8 +44,32 @@ class PineconeVectorStore:
 
     # --- Index lifecycle ---
 
+    @staticmethod
+    def _index_names(idx_list: Any) -> set[str]:
+        """Extract index names across Pinecone SDK shapes. v8 returns an
+        IndexList (iterable of IndexModel, with a .names() helper); older
+        clients returned a dict {'indexes': [{'name': ...}]}."""
+        if hasattr(idx_list, "names"):
+            try:
+                return set(idx_list.names())
+            except Exception:
+                pass
+        names: set[str] = set()
+        try:
+            items = idx_list.get("indexes", []) if hasattr(idx_list, "get") else idx_list
+        except Exception:
+            items = idx_list
+        for it in items or []:
+            if isinstance(it, dict):
+                n = it.get("name")
+            else:
+                n = getattr(it, "name", None)
+            if n:
+                names.add(n)
+        return names
+
     def ensure_index(self) -> None:
-        existing = {i["name"] for i in self._pc.list_indexes().get("indexes", [])}
+        existing = self._index_names(self._pc.list_indexes())
         if self._index_name not in existing:
             log.info("pinecone.create_index", name=self._index_name,
                      cloud=self._cloud, region=self._region, metric=self._metric)
@@ -58,7 +82,11 @@ class PineconeVectorStore:
             # Wait for ready
             for _ in range(60):
                 desc = self._pc.describe_index(self._index_name)
-                if desc.get("status", {}).get("ready"):
+                status = desc.get("status", {}) if hasattr(desc, "get") \
+                    else getattr(desc, "status", {})
+                ready = status.get("ready") if hasattr(status, "get") \
+                    else getattr(status, "ready", False)
+                if ready:
                     break
                 time.sleep(2)
         self._index = self._pc.Index(self._index_name)

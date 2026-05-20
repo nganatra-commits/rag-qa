@@ -280,6 +280,42 @@ export function ChatInterface({
         )}
       </div>
 
+      {docFilter.length > 0 && (() => {
+        const selectedLabels = docFilter
+          .map((id) => DOCS.find((d) => d.id === id)?.label ?? id)
+          .join(", ");
+        const excluded = DOCS
+          .filter((d) => !docFilter.includes(d.id))
+          .map((d) => d.label);
+        return (
+          <div
+            role="status"
+            className={cn(
+              "border-b border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40",
+              "px-4 py-2 flex items-center gap-3 text-xs",
+              !isWidget && "px-4 sm:px-6"
+            )}
+          >
+            <span className="font-medium text-amber-900 dark:text-amber-200">
+              ⚠ Search is restricted to: {selectedLabels}
+            </span>
+            {excluded.length > 0 && (
+              <span className="text-amber-800/80 dark:text-amber-300/80">
+                · {excluded.join(" + ")} excluded
+              </span>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDocFilter([])}
+              className="h-6 px-2 text-[11px] ml-auto border-amber-400 text-amber-900 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/30"
+            >
+              Search all docs
+            </Button>
+          </div>
+        );
+      })()}
+
       <div ref={scrollRef} className={cn(
         "flex-1 overflow-y-auto",
         isWidget ? "px-3 py-3" : "px-4 sm:px-6 py-6"
