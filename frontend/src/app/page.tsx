@@ -12,6 +12,7 @@ import {
 } from "@/lib/chat-history";
 import { backend } from "@/lib/api";
 import { readUrlContext } from "@/lib/embed";
+import { randomId } from "@/lib/utils";
 
 /**
  * Full-page ChatGPT-like layout: persistent left sidebar with the entire
@@ -85,13 +86,13 @@ export default function Page() {
             setDocFilter(local.docFilter ?? []);
             syncUrl(local.id);
           } else {
-            const fresh = crypto.randomUUID();
+            const fresh = randomId();
             setActiveId(fresh);
             syncUrl(fresh);
           }
         }
       } else {
-        const fresh = crypto.randomUUID();
+        const fresh = randomId();
         setActiveId(fresh);
         syncUrl(fresh);
       }
@@ -162,7 +163,7 @@ export default function Page() {
   }, [turns, docFilter, activeId]);
 
   const handleNewChat = React.useCallback(() => {
-    const fresh = crypto.randomUUID();
+    const fresh = randomId();
     setActiveId(fresh);
     setTurns([]);
     setDocFilter([]);

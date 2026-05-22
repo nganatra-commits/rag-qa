@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { AssistantMessage } from "@/components/message";
 import { Citations } from "@/components/citation";
-import { cn, formatLatency, formatTokens } from "@/lib/utils";
+import { cn, formatLatency, formatTokens, randomId } from "@/lib/utils";
 import { backend } from "@/lib/api";
 import type { AnswerResponse, BuildInfo, HistoryTurn } from "@/types/api";
 import type { StoredTurn } from "@/lib/chat-history";
@@ -112,7 +112,7 @@ export function ChatInterface({
     // Display the raw question in the UI; only the LLM sees the
     // host-context-prefixed version. Subsequent turns' history stays clean.
     const composed = buildQueryWithContext(q, hostContext);
-    const userTurn: Turn = { role: "user", content: q, id: crypto.randomUUID() };
+    const userTurn: Turn = { role: "user", content: q, id: randomId() };
     setTurns((t) => [...t, userTurn]);
     setInput("");
     setBusy(true);
@@ -129,14 +129,14 @@ export function ChatInterface({
       });
       setTurns((t) => [
         ...t,
-        { role: "assistant", data, imagesEnabled: turnImagesEnabled, id: crypto.randomUUID() },
+        { role: "assistant", data, imagesEnabled: turnImagesEnabled, id: randomId() },
       ]);
       postToParent({ type: "ANSWER", text: data.answer });
     } catch (err) {
       const message = err instanceof Error ? err.message : "request failed";
       setTurns((t) => [
         ...t,
-        { role: "error", message, id: crypto.randomUUID() },
+        { role: "error", message, id: randomId() },
       ]);
       postToParent({ type: "ERROR", message });
     } finally {
