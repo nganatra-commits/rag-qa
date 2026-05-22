@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # --- Generation ---
     max_output_tokens: int = 1024
     temperature: float = 0.2
-    max_images_per_answer: int = 4
+    max_images_per_answer: int = 6
 
     # --- Chat history (DynamoDB; blank table name disables persistence) ---
     chats_table: str = ""

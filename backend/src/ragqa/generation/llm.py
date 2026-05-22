@@ -123,37 +123,59 @@ class MultimodalAnswerer:
         )
 
     def _image_blocks(self, hits: list[RetrievalHit]) -> tuple[list[dict], list[str]]:
-        """Build OpenAI image_url content blocks for the top images across the
-        retrieved chunks, deduped by image_id, capped at self._max_images.
+        """Build OpenAI vision content blocks for the most relevant images
+        across the retrieved chunks, deduped by image_id, capped at
+        self._max_images.
+
+        Two things matter for the LLM to cite figures correctly:
+          1. Order by binding_score (explicit-ref 1.0 > captioned 0.9 >
+             layout 0.7 > section 0.5 > unbound 0.2) so the best-bound
+             images win the limited vision slots — not whatever came
+             first in reading order (often a logo).
+          2. Label each image with its id via a preceding text block, so
+             the model can map the pixels it sees to the [FIGURE: id] it
+             must emit. Unlabeled images left the model guessing.
         """
+        # Collect unique candidates, then sort by binding_score desc.
         seen: set[str] = set()
-        blocks: list[dict] = []
-        used: list[str] = []
+        candidates = []
         for h in hits:
             for img in h.chunk.images:
-                if len(blocks) >= self._max_images:
-                    break
                 if img.image_id in seen:
                     continue
                 seen.add(img.image_id)
-                p = Path(img.uri)
-                if not p.exists():
-                    log.warning("answer.image.missing", path=str(p))
-                    continue
-                try:
-                    data = base64.standard_b64encode(p.read_bytes()).decode("ascii")
-                except Exception as e:
-                    log.warning("answer.image.read_fail", err=repr(e), path=str(p))
-                    continue
-                media_type = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
-                blocks.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{media_type};base64,{data}",
-                        "detail": "high",
-                    },
-                })
-                used.append(img.image_id)
+                candidates.append(img)
+        candidates.sort(key=lambda im: getattr(im, "binding_score", 0.0) or 0.0,
+                         reverse=True)
+
+        blocks: list[dict] = []
+        used: list[str] = []
+        for img in candidates:
+            if len(used) >= self._max_images:
+                break
+            p = Path(img.uri)
+            if not p.exists():
+                log.warning("answer.image.missing", path=str(p))
+                continue
+            try:
+                data = base64.standard_b64encode(p.read_bytes()).decode("ascii")
+            except Exception as e:
+                log.warning("answer.image.read_fail", err=repr(e), path=str(p))
+                continue
+            media_type = "image/png" if p.suffix.lower() == ".png" else "image/jpeg"
+            # Label block: tells the model which id this image carries.
+            blocks.append({
+                "type": "text",
+                "text": f"[image {img.image_id}] cite as [FIGURE: {img.image_id}]",
+            })
+            blocks.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{media_type};base64,{data}",
+                    "detail": "high",
+                },
+            })
+            used.append(img.image_id)
         return blocks, used
 
     @staticmethod
