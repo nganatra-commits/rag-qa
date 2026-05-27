@@ -360,7 +360,7 @@ export function ChatInterface({
             "mt-1.5 text-[10px] text-[var(--muted-foreground)]",
             !isWidget && "max-w-3xl mx-auto"
           )} title={`built ${build.build_time} · instance started ${build.image_started_at}`}>
-            Build <code>{build.git_sha}</code> · v{build.version} · model <code>{build.llm_model}</code>
+            Build <code>{build.git_sha}</code> · v{build.version}
           </div>
         )}
       </footer>
