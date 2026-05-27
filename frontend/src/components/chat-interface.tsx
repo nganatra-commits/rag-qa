@@ -193,7 +193,8 @@ export function ChatInterface({
     <div className={cn("flex flex-col", isWidget ? "h-full" : "h-dvh")}>
       <header
         className={cn(
-          "border-b border-[var(--border)] px-4 py-2.5 flex items-center justify-between gap-3 bg-[var(--background)]",
+          "bg-header-gradient text-on-gradient",
+          "px-4 py-2.5 flex items-center justify-between gap-3",
           !isWidget && "px-4 sm:px-6 py-3"
         )}
       >
@@ -205,15 +206,15 @@ export function ChatInterface({
               onClick={onToggleSidebar}
               aria-label="Toggle chat history"
               title="Chat history"
-              className="h-8 w-8 md:hidden"
+              className="h-8 w-8 md:hidden text-white hover:bg-white/10"
             >
               <Menu className="size-4" />
             </Button>
           )}
           <div className="min-w-0">
-            <h1 className="font-semibold text-sm truncate">NWA QA Assistant</h1>
+            <h1 className="font-semibold text-sm truncate text-white">NWA QA Assistant</h1>
             {!isWidget && (
-              <p className="text-xs text-[var(--muted-foreground)] hidden sm:block">
+              <p className="text-xs text-white/70 hidden sm:block">
                 Image-friendly RAG · grounded in the QA docs
               </p>
             )}
@@ -351,7 +352,11 @@ export function ChatInterface({
               "px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             )}
           />
-          <Button onClick={() => void send()} disabled={busy || !input.trim()}>
+          <Button
+            onClick={() => void send()}
+            disabled={busy || !input.trim()}
+            className="bg-cta-gradient text-white border-0 hover:opacity-95"
+          >
             <Send className="size-4" />
           </Button>
         </div>

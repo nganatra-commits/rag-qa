@@ -1,28 +1,71 @@
 @import "tailwindcss";
 
+/* ============================================================
+ * Insights design tokens
+ * Source: Insights design spec (27 May 2026) — keep in lockstep.
+ * Tailwind utilities consume these via the @theme block below.
+ * ============================================================ */
+
 :root {
-  --background: #fafaf9;
-  --foreground: #18181b;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --border: #e4e4e7;
-  --primary: #18181b;
-  --primary-foreground: #fafafa;
-  --accent: #2563eb;
+  /* Surfaces */
+  --background: #F8FAFF;        /* page background */
+  --muted: #EFF6FF;             /* panel / card background */
+  --panel-tint: #DBEAFE;        /* subtle panel tint */
+  --surface-elevated: #FFFFFF;  /* dialogs, popovers */
+
+  /* Text */
+  --foreground: #111827;                  /* body text */
+  --muted-foreground: rgba(0, 0, 0, 0.55); /* secondary text */
+
+  /* Borders */
+  --border: rgba(30, 58, 138, 0.15);
+
+  /* Brand */
+  --primary: #1E3A8A;            /* primary blue (headers, nav) */
+  --primary-foreground: #ffffff; /* button text */
+  --accent: #2563EB;             /* interactive blue (buttons, links) */
   --accent-foreground: #ffffff;
+  --highlight: #3B82F6;          /* highlight / progress */
+  --gradient-end: #4F46E5;       /* CTA gradient end */
+
+  /* Icons */
+  --icon: #1E3A8A;
+  --icon-bg: rgba(30, 58, 138, 0.08);
+
+  /* Gradients (mode-aware) */
+  --header-gradient: linear-gradient(135deg, #1E3A8A 0%, #312E81 100%);
+  --cta-gradient: linear-gradient(135deg, #1E3A8A 0%, #4F46E5 100%);
+
+  /* Status (shared across modes) */
+  --success: #34D399;
+  --error: #EF4444;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #fafafa;
-    --muted: #18181b;
-    --muted-foreground: #a1a1aa;
-    --border: #27272a;
-    --primary: #fafafa;
-    --primary-foreground: #18181b;
-    --accent: #60a5fa;
-    --accent-foreground: #0a0a0a;
+    --background: #0D1117;
+    --muted: #161B22;
+    --panel-tint: rgba(25, 118, 210, 0.10);
+    --surface-elevated: #1C2129;
+
+    --foreground: rgba(255, 255, 255, 0.87);
+    --muted-foreground: rgba(255, 255, 255, 0.55);
+    --disabled-foreground: rgba(255, 255, 255, 0.35);
+
+    --border: rgba(99, 102, 241, 0.25);
+
+    --primary: #60A5FA;
+    --primary-foreground: #0D1117;
+    --accent: #60A5FA;
+    --accent-foreground: #0D1117;
+    --highlight: #93C5FD;
+    --gradient-end: #4F46E5;
+
+    --icon: #93C5FD;
+    --icon-bg: rgba(99, 102, 241, 0.18);
+
+    --header-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    --cta-gradient: linear-gradient(135deg, #1E3A8A 0%, #4F46E5 100%);
   }
 }
 
@@ -36,7 +79,12 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-highlight: var(--highlight);
+  --color-success: var(--success);
+  --color-error: var(--error);
+  /* Inter (loaded in layout.tsx via next/font) → CSS var --font-inter */
+  --font-sans: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
 }
 
@@ -44,7 +92,26 @@ html, body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  font-size: 14px; /* Insights body size */
   -webkit-font-smoothing: antialiased;
 }
 
 * { border-color: var(--border); }
+
+/* ============================================================
+ * Brand utility classes
+ * ============================================================ */
+
+.bg-header-gradient { background: var(--header-gradient); }
+
+.bg-cta-gradient {
+  background: var(--cta-gradient);
+  color: #ffffff;
+}
+.bg-cta-gradient:hover { filter: brightness(1.08); }
+.bg-cta-gradient:disabled {
+  filter: grayscale(0.4) brightness(0.85);
+  cursor: not-allowed;
+}
+
+.text-on-gradient { color: rgba(255, 255, 255, 0.95); }
