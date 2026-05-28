@@ -107,7 +107,7 @@ def _parse(text: str) -> dict | None:
 @lru_cache(maxsize=1024)
 def _cached_call(query: str, chunk_key: str, model: str, base_url: str | None,
                  api_key: str, max_tokens: int, cand_chars: int,
-                 candidates_block: str) -> str:
+                 candidates_block: str, reasoning_effort: str) -> str:
     """Returns raw JSON string from the model, or '' on error. Cached by
     (query, chunk_key) so repeats are free. chunk_key is the ordered
     tuple of chunk_ids; candidates_block is passed through (not part of
@@ -124,6 +124,7 @@ def _cached_call(query: str, chunk_key: str, model: str, base_url: str | None,
             ],
             max_tokens=max_tokens,
             temperature=0.0,  # ignored for gpt-5 family (fixed at 1.0)
+            reasoning_effort=reasoning_effort or None,
             response_format={"type": "json_object"},
         )
     except OpenAIError as e:
@@ -155,7 +156,7 @@ def understand_and_rerank(query: str, hits: list[RetrievalHit],
     raw = _cached_call(
         query.strip(), chunk_key, s.understand_model, s.openai_base_url,
         s.openai_api_key, s.understand_max_tokens, s.understand_candidate_chars,
-        block,
+        block, s.reasoning_effort or "",
     )
     data = _parse(raw)
     if not data:

@@ -43,12 +43,16 @@ class MultimodalAnswerer:
         max_output_tokens: int = 1024,
         temperature: float = 0.2,
         max_images: int = 4,
+        reasoning_effort: str | None = None,
+        top_p: float | None = None,
     ):
         self._client = OpenAIClient(api_key=api_key, base_url=base_url, timeout=120.0)
         self._model = model
         self._max_tokens = max_output_tokens
         self._temperature = temperature
         self._max_images = max_images
+        self._reasoning_effort = reasoning_effort
+        self._top_p = top_p
 
     def answer(
         self,
@@ -98,6 +102,8 @@ class MultimodalAnswerer:
                 ],
                 max_tokens=self._max_tokens,
                 temperature=self._temperature,
+                reasoning_effort=self._reasoning_effort,
+                top_p=self._top_p,
             )
         except OpenAIError as e:
             raise GenerationError(f"answer call failed: {e}") from e

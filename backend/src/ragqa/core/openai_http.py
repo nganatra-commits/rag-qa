@@ -66,10 +66,14 @@ class OpenAIClient:
         temperature: float = 0.2,
         response_format: dict[str, Any] | None = None,
         timeout: float | None = None,
+        reasoning_effort: str | None = None,
+        top_p: float | None = None,
     ) -> dict[str, Any]:
         # gpt-5 / o1 / o3 family renamed max_tokens -> max_completion_tokens
-        # AND fix temperature at 1.0 (no override). Only send custom temperature
-        # for older families (gpt-4o, gpt-4-turbo, etc.).
+        # AND reject `temperature` (fixed at 1.0). For those, determinism /
+        # focus is controlled via `reasoning_effort` (minimal|low|medium|high)
+        # and `top_p` instead. Older families (gpt-4o, gpt-4-turbo) take the
+        # classic temperature knob.
         is_new_family = model.startswith(("gpt-5", "o1", "o3", "o4"))
         body: dict[str, Any] = {
             "model": model,
@@ -77,10 +81,17 @@ class OpenAIClient:
         }
         if is_new_family:
             body["max_completion_tokens"] = max_tokens
-            # temperature is fixed at 1.0 for these models; do not send it
+            # No temperature for this family. Lower reasoning_effort →
+            # faster, more focused, more stable output for doc Q&A.
+            if reasoning_effort:
+                body["reasoning_effort"] = reasoning_effort
         else:
             body["max_tokens"] = max_tokens
             body["temperature"] = temperature
+        # top_p is accepted by both families and tightens sampling toward
+        # the most-likely tokens (reduces phrasing variance) when set.
+        if top_p is not None:
+            body["top_p"] = top_p
         if response_format is not None:
             body["response_format"] = response_format
         return self._post_json("/chat/completions", body, timeout=timeout)

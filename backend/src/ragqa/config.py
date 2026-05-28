@@ -59,7 +59,12 @@ class Settings(BaseSettings):
 
     # --- Generation ---
     max_output_tokens: int = 1024
-    temperature: float = 0.2
+    temperature: float = 0.2          # gpt-4o family only (ignored by gpt-5.x)
+    # gpt-5.x can't take `temperature`; these are the determinism/focus
+    # knobs instead. reasoning_effort minimal|low|medium|high; "low" keeps
+    # procedural doc answers focused + more stable. top_p None = don't send.
+    reasoning_effort: str = "low"
+    top_p: float | None = None
     max_images_per_answer: int = 6
 
     # --- Chat history (DynamoDB; blank table name disables persistence) ---

@@ -71,6 +71,8 @@ def _build_components() -> dict:
         max_output_tokens=s.max_output_tokens,
         temperature=s.temperature,
         max_images=s.max_images_per_answer,
+        reasoning_effort=s.reasoning_effort,
+        top_p=s.top_p,
     )
     return {"retriever": retriever, "answerer": answerer, "store": store}
 
