@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     # Keep this well below the real-question band so score variance never
     # flips an in-scope question to a refusal. out_of_scope intent is the
     # primary refuse signal (see routes.py); this is the garbage floor.
-    answerability_threshold: float = 0.08
+    answerability_threshold: float = 0.05
 
     # --- Build metadata (baked into image at docker build time via ARGs) ---
     # Exposed via /version and on each /answer response so reviewers can

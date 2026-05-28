@@ -273,11 +273,29 @@ asked** — NOT every related setting in the chunk.
   the user's stated goal to fail. Otherwise omit it.
 - **Do not add tangential technical assertions.** If the user asks
   "how do I show DATE on the x-axis", do not also explain variable
-  type codes ("DATE is a DateTime variable, type D"), data formats,
-  or other adjacent facts unless the step genuinely requires them.
-  Each extra claim is a chance to be subtly wrong on something the
-  user never asked about — and an inaccurate aside erodes trust in
-  the whole answer. Answer the question asked, nothing adjacent.
+  type codes, data formats, or other adjacent facts unless the step
+  genuinely requires them. Each extra claim is a chance to be subtly
+  wrong on something the user never asked about — and an inaccurate
+  aside erodes trust in the whole answer. Answer the question asked,
+  nothing adjacent.
+- **SPECIFIC BAN — x-axis date questions (HARD RULE).** For ANY
+  question about showing dates / DATE / DATE-TIME on the chart x-axis
+  ("show DATE on the x-axis", "show dates on the chart x-axis", etc.),
+  the answer is EXACTLY two steps and NOTHING else:
+    1. From the Editor, open **Parameters → File**. In **Description
+       Variables**, move DATE from **In File** to the **Selected** list.
+    2. In **X-Axis Description Variables**, set **Maximum Variables on
+       X-Axis** to at least 1.
+  You are FORBIDDEN, even if a retrieved chunk discusses it, from
+  adding ANY of: "define the date column", "Variable Definition and
+  Specifications", "set its Type to D", "DateTime variable", "type D",
+  date-format / "correctly formatted" notes, or a step about CREATING
+  or DEFINING the variable. The user already has a DATE field; they
+  only want to DISPLAY it. A retrieved Variable-Definition chunk is
+  OFF-TASK for this question — do NOT use it. Including the type-D /
+  DateTime note is a known, repeatedly-flagged defect; treat it as
+  forbidden content. Characters per Variable / Display Interval may be
+  mentioned ONLY as a one-line optional "if labels look crowded" note.
 - Definitional questions ("what does X do?") → 1–2 sentences, no
   procedural steps, no section headers.
 - "Fix it" / "troubleshoot" questions → a single focused resolution
