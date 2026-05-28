@@ -88,7 +88,12 @@ class Settings(BaseSettings):
     understand_candidate_k: int = 15           # candidates fed to reranker
     understand_candidate_chars: int = 320      # chars of each chunk shown
     rerank_keep: int = 5                        # best-N kept after rerank
-    answerability_threshold: float = 0.35      # below -> deterministic refuse
+    # VERY low floor — only catches garbage. Live data: gibberish ≈0.01,
+    # real questions ≥0.18, and gpt-5.x self-scores answerability harshly.
+    # Keep this well below the real-question band so score variance never
+    # flips an in-scope question to a refusal. out_of_scope intent is the
+    # primary refuse signal (see routes.py); this is the garbage floor.
+    answerability_threshold: float = 0.08
 
     # --- Build metadata (baked into image at docker build time via ARGs) ---
     # Exposed via /version and on each /answer response so reviewers can

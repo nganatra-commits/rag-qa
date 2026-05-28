@@ -323,6 +323,16 @@ def answer(
         u = understand_and_rerank(retrieval_query, hits, settings)
         hits = u.reranked_hits
         u_intent, u_answerable = u.intent, u.answerable
+        # CONSERVATIVE gate — only refuse on the clearest signals. Live
+        # data: gibberish scores ~0.01 while genuinely-answerable
+        # questions score ≥0.18 (and gpt-5.x self-scores HARSHLY +
+        # sometimes mislabels a good question "unanswerable"). So we
+        # refuse only on out_of_scope intent OR a very low score floor
+        # that cleanly separates garbage from real questions. We do NOT
+        # refuse on "unanswerable" intent alone — it flips run-to-run and
+        # would regress good questions (e.g. "create a histogram", which
+        # the prior build answered 9/10). The LLM's own prompt-driven
+        # refusal remains the backstop for borderline cases.
         if u.used_llm and (
             u.intent == "out_of_scope"
             or u.answerable < settings.answerability_threshold
