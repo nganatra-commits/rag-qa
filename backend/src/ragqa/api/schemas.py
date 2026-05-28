@@ -101,6 +101,11 @@ class AnswerResponse(BaseModel):
     # for backwards-compat with old clients; the frontend renders it as a
     # per-turn badge so reviewers can tag a specific answer to a deploy.
     build: BuildInfo | None = None
+    # Question-understanding stage observability (optional): the LLM's
+    # intent classification + answerability confidence. Lets SME testers
+    # see WHY a refusal happened.
+    intent: str | None = None
+    answerable: float | None = None
 
 
 class FeedbackRequest(BaseModel):

@@ -72,6 +72,19 @@ class Settings(BaseSettings):
     query_rewrite_enabled: bool = True
     query_rewrite_model: str = "gpt-4o-mini"
 
+    # --- Question understanding + LLM rerank + answerability gate ---
+    # Precision stage between retrieval and generation: classifies the
+    # question intent, reranks candidate chunks by LLM-judged relevance,
+    # and reports an answerability confidence used for a deterministic
+    # in-code refusal. Fails open (answers as before) on any error.
+    understand_enabled: bool = True
+    understand_model: str = "gpt-5.4"
+    understand_max_tokens: int = 2000          # reasoning-token headroom
+    understand_candidate_k: int = 15           # candidates fed to reranker
+    understand_candidate_chars: int = 320      # chars of each chunk shown
+    rerank_keep: int = 5                        # best-N kept after rerank
+    answerability_threshold: float = 0.35      # below -> deterministic refuse
+
     # --- Build metadata (baked into image at docker build time via ARGs) ---
     # Exposed via /version and on each /answer response so reviewers can
     # tag analysis notes with the exact build that produced an answer.

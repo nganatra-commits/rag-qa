@@ -37,6 +37,7 @@ from ragqa.core.logging import get_logger
 from ragqa.generation.llm import MultimodalAnswerer
 from ragqa.retrieval.hybrid import HybridRetriever
 from ragqa.retrieval.query_rewriter import expand_query
+from ragqa.retrieval.understand import understand_and_rerank
 from ragqa.retrieval.vectorstore import PineconeVectorStore
 from ragqa.storage import ChatStoreUnavailable, get_chat_store
 
@@ -295,14 +296,42 @@ def answer(
     # repeats are free. Falls back to single-query retrieval on any error.
     expanded = expand_query(retrieval_query)
 
+    # When the understand/rerank stage is on, pull a WIDER candidate set
+    # so the reranker has real choices (the retriever otherwise returns
+    # only rerank_top_k≈5). The understand stage then trims to rerank_keep.
+    candidate_k = (
+        max(settings.understand_candidate_k, body.rerank_top_k or 0)
+        if settings.understand_enabled and body.rerank_top_k is None
+        else body.rerank_top_k
+    )
     hits = retriever.retrieve(
         query=retrieval_query,
         top_k=body.top_k,
-        rerank_top_k=body.rerank_top_k,
+        rerank_top_k=candidate_k,
         alpha=body.alpha,
         doc_filter=body.doc_filter,
         expanded_queries=expanded,
     )
+
+    # Question understanding + LLM rerank + answerability gate. One call
+    # classifies intent, reranks candidates by judged relevance, and
+    # reports answerability. Deterministic refusal when the corpus can't
+    # answer — before spending the answer call. Fails open.
+    u_intent: str | None = None
+    u_answerable: float | None = None
+    if settings.understand_enabled and hits:
+        u = understand_and_rerank(retrieval_query, hits, settings)
+        hits = u.reranked_hits
+        u_intent, u_answerable = u.intent, u.answerable
+        if u.used_llm and (
+            u.intent == "out_of_scope"
+            or u.answerable < settings.answerability_threshold
+        ):
+            log.info("answer.refused.low_confidence", request_id=request_id,
+                     query=body.query[:120], intent=u.intent,
+                     answerable=round(u.answerable, 3))
+            return _not_found_refusal_response(body.query, t0, build,
+                                               u_intent, u_answerable)
     # Strip blank/uniform images from each hit's chunk before they reach
     # the LLM and the response payload. Same Chunk objects come from the
     # Pinecone metadata round-trip, so editing here is local and safe.
@@ -400,6 +429,8 @@ def answer(
         output_tokens=result.output_tokens,
         latency_ms=int((time.perf_counter() - t0) * 1000),
         build=build,
+        intent=u_intent,
+        answerable=u_answerable,
     )
 
 
@@ -550,6 +581,33 @@ def _aks_refusal_response(query: str, started_at: float,
         input_tokens=0, output_tokens=0,
         latency_ms=int((time.perf_counter() - started_at) * 1000),
         build=build,
+    )
+
+
+_NOT_FOUND_REFUSAL = (
+    "I could not find this in the NWA Quality Analyst manuals. Please "
+    "rephrase, or check whether the topic is covered in the QA User's "
+    "Manual, Tutorials, or Installation Guide."
+)
+
+
+def _not_found_refusal_response(query: str, started_at: float,
+                                build: BuildInfo | None = None,
+                                intent: str | None = None,
+                                answerable: float | None = None) -> AnswerResponse:
+    """Deterministic refusal when the understand stage judges the
+    retrieved chunks can't answer the question — emitted WITHOUT calling
+    the answer model."""
+    return AnswerResponse(
+        query=query,
+        answer=_NOT_FOUND_REFUSAL,
+        citations=[], images=[], referenced_image_ids=[], chunks=[],
+        is_refusal=True,
+        input_tokens=0, output_tokens=0,
+        latency_ms=int((time.perf_counter() - started_at) * 1000),
+        build=build,
+        intent=intent,
+        answerable=answerable,
     )
 
 
