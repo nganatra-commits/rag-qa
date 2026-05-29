@@ -15,6 +15,38 @@ export function formatLatency(ms: number) {
 }
 
 /**
+ * Copy text to the clipboard, surviving non-secure contexts.
+ * navigator.clipboard requires a secure context (HTTPS/localhost) — the same
+ * constraint that breaks crypto.randomUUID inside an HTTP-parent iframe. Fall
+ * back to the legacy execCommand path so Copy works in the Insights embed.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to legacy path */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * UUID v4 generator that survives non-secure contexts.
  *
  * `crypto.randomUUID()` is only available in a secure context (HTTPS,

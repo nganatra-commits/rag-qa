@@ -250,17 +250,27 @@ function makeMarkdownComponents(
         {children}
       </em>
     ),
-    a: ({ children, href, ...p }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="text-[var(--accent)] underline decoration-[var(--accent)]/40 underline-offset-2 hover:decoration-[var(--accent)]"
-        {...p}
-      >
-        {children}
-      </a>
-    ),
+    a: ({ children, href, title }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+      // Only http/https/mailto links are clickable. QA answers frequently quote
+      // Windows/UNC file paths (\\server\share, C:\...) and file:// URLs; making
+      // those clickable triggers Chrome's "open an external application"
+      // permission prompt. Render any non-web link as plain text instead.
+      const clickable = !!href && /^(https?:|mailto:)/i.test(href);
+      if (!clickable) {
+        return <span title={title}>{children}</span>;
+      }
+      return (
+        <a
+          href={href}
+          title={title}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[var(--accent)] underline decoration-[var(--accent)]/40 underline-offset-2 hover:decoration-[var(--accent)]"
+        >
+          {children}
+        </a>
+      );
+    },
     blockquote: ({ children, ...p }: React.HTMLAttributes<HTMLQuoteElement>) => (
       <blockquote
         className="my-2 border-l-2 border-[var(--accent)]/40 pl-3 italic text-[var(--muted-foreground)]"

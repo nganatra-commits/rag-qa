@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Send, Loader2, Bot, User, Image as ImageIcon, ImageOff, X, Menu } from "lucide-react";
+import { Send, Loader2, Bot, User, Image as ImageIcon, ImageOff, X, Menu, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { AssistantMessage } from "@/components/message";
 import { Citations } from "@/components/citation";
+import { QuestionLibrary } from "@/components/question-library";
 import { cn, formatLatency, formatTokens, randomId } from "@/lib/utils";
 import { backend } from "@/lib/api";
 import type { AnswerResponse, BuildInfo, HistoryTurn } from "@/types/api";
@@ -72,6 +73,7 @@ export function ChatInterface({
   const [busy, setBusy] = React.useState(false);
   const [imagesEnabled, setImagesEnabled] = React.useState<boolean>(true);
   const [build, setBuild] = React.useState<BuildInfo | null>(null);
+  const [libOpen, setLibOpen] = React.useState(false);
   const [hostContext, setHostContext] = React.useState<Record<string, string>>(
     initialContext ?? {}
   );
@@ -339,7 +341,17 @@ export function ChatInterface({
         "border-t border-[var(--border)] bg-[var(--background)]",
         isWidget ? "px-3 py-2.5" : "px-4 sm:px-6 py-4"
       )}>
-        <div className={cn("flex gap-2", !isWidget && "max-w-3xl mx-auto")}>
+        <div className={cn("flex gap-2 items-end", !isWidget && "max-w-3xl mx-auto")}>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setLibOpen(true)}
+            aria-label="Open question library"
+            title="Question library"
+            className="shrink-0 h-9 w-9 text-[var(--icon)] border-[var(--border)]"
+          >
+            <BookOpen className="size-4" />
+          </Button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -369,6 +381,12 @@ export function ChatInterface({
           </div>
         )}
       </footer>
+
+      <QuestionLibrary
+        open={libOpen}
+        onClose={() => setLibOpen(false)}
+        onSend={(q) => { setLibOpen(false); void sendWithText(q); }}
+      />
     </div>
   );
 }
@@ -378,7 +396,7 @@ function TurnView({ turn }: { turn: Turn }) {
     return (
       <div className="flex gap-2.5">
         <Avatar role="user" />
-        <div className="rounded-lg bg-[var(--muted)] px-3 py-2 text-sm">
+        <div className="rounded-lg bg-[var(--accent)] text-[var(--accent-foreground)] px-3 py-2 text-sm">
           {turn.content}
         </div>
       </div>
