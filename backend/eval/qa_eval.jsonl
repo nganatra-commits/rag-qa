@@ -1,0 +1,30 @@
+{"id": "lib-01", "question": "How do I create a histogram?", "expected_behavior": "answer", "expected_phrases": ["histogram", "selected"], "notes": "Question Library — canonical procedural baseline"}
+{"id": "lib-02", "question": "How to add a new control limit region and how to fix a region based on data?", "expected_behavior": "answer", "expected_phrases": ["region", "control limit"], "notes": "Question Library — control limit region"}
+{"id": "lib-03", "question": "How to add a new control limit region", "expected_behavior": "answer", "expected_phrases": ["region", "control limit"], "notes": "Question Library — simpler phrasing of lib-02"}
+{"id": "lib-04", "question": "How do I show DATE on the x-axis of my charts?", "expected_behavior": "answer", "expected_phrases": ["DATE", "selected", "x-axis"], "notes": "Question Library — guards against type-D HARD BAN regression"}
+{"id": "lib-05", "question": "How do I show dates on the chart x-axis?", "expected_behavior": "answer", "expected_phrases": ["DATE", "selected", "x-axis"], "notes": "Paraphrase of lib-04 — same expected output"}
+{"id": "lib-06", "question": "How do I get data from Excel into QA and create a chart?", "expected_behavior": "answer", "expected_phrases": ["excel"], "notes": "Question Library — Excel ingest"}
+{"id": "lib-07", "question": "How do I get data from an Excel XLSX file into QA and create a chart?", "expected_behavior": "answer", "expected_phrases": ["excel"], "notes": "Question Library — XLSX phrasing"}
+{"id": "lib-08", "question": "How do I get data from Access into QA and create a chart?", "expected_behavior": "answer", "expected_phrases": ["access"], "notes": "Question Library — Access ingest"}
+{"id": "lib-09", "question": "X-axis are not showing DATE/TIME, how to fix it?", "expected_behavior": "answer", "expected_phrases": ["DATE", "x-axis"], "notes": "Question Library — troubleshooting"}
+{"id": "lib-10", "question": "Why out-of-control keeping showing as not acknowledged in my dashboard?", "expected_behavior": "answer", "expected_phrases": ["acknowledge"], "notes": "Question Library — ACCA / dashboard"}
+{"id": "lib-11", "question": "I used the hyperlink in the chart to access a QA file. Why do I not see my ACCA list?", "expected_behavior": "answer", "expected_phrases": ["ACCA"], "notes": "Question Library — chart hyperlink"}
+{"id": "lib-12", "question": "The histogram doesn't calculate some statistics I want.", "expected_behavior": "answer", "expected_phrases": ["histogram"], "notes": "Question Library — histogram stats"}
+{"id": "lib-13", "question": "How to remove an out-of-control point from the control limit calculation?", "expected_behavior": "answer", "expected_phrases": ["out-of-control"], "notes": "Question Library — tag-data flow"}
+{"id": "lib-14", "question": "How do I automate charting?", "expected_behavior": "answer", "expected_phrases": ["run file"], "notes": "Question Library — automation / run files"}
+{"id": "lib-15", "question": "How do I create charts automatically?", "expected_behavior": "answer", "expected_phrases": ["run file"], "notes": "Question Library — paraphrase of lib-14"}
+{"id": "lib-16", "question": "How do I automate creating a histogram?", "expected_behavior": "answer", "expected_phrases": ["histogram"], "notes": "Question Library — histogram automation"}
+{"id": "dom-q1", "question": "Where is the ODBC error log located?", "expected_behavior": "answer", "expected_phrases": ["connectivity"], "notes": "Dom 6/6 — guards against Settings-padding regression"}
+{"id": "dom-q3", "question": "Change column order in the editor grid", "expected_behavior": "answer", "expected_phrases": ["column"], "notes": "Dom 6/6 — editor grid columns"}
+{"id": "dom-q4", "question": "Can QA 8 create one-way ANOVA reports?", "expected_behavior": "answer", "expected_phrases": ["ANOVA"], "notes": "Dom 6/6 — guards against help/show-you regression"}
+{"id": "dom-q5", "question": "Does QA need a database to store ACCAs?", "expected_behavior": "answer", "expected_phrases": ["ACCA"], "notes": "Dom 6/6 — multi-source synthesis"}
+{"id": "lex-anova-cmd", "question": "ANOVA command inpfile vars output outfile", "expected_behavior": "answer", "expected_phrases": ["ANOVA"], "notes": "BM25 lexical-precise probe — exact command name"}
+{"id": "lex-xrs-cmd", "question": "XRS command syntax for FILLBAG data file", "expected_behavior": "answer", "expected_phrases": ["XRS"], "notes": "BM25 lexical-precise probe — exact command name"}
+{"id": "lex-histogram-syntax", "question": "HISTOGRAM command syntax", "expected_behavior": "answer", "expected_phrases": ["histogram"], "notes": "BM25 lexical-precise probe — exact command"}
+{"id": "aks-dom-q2", "question": "What is the AKS Configuration used for?", "expected_behavior": "aks_refuse", "expected_phrases": [], "notes": "Dom 6/6 — verifies AKS gate"}
+{"id": "aks-tracker-q5", "question": "How do I configure AKS dashboard alarms?", "expected_behavior": "aks_refuse", "expected_phrases": [], "notes": "Tracker — AKS"}
+{"id": "aks-tracker-q8", "question": "How do I use the AKS Operator Dashboard?", "expected_behavior": "aks_refuse", "expected_phrases": [], "notes": "Tracker — AKS Operator Dashboard"}
+{"id": "aks-tracker-q9", "question": "Explain the Dashboard Designer.", "expected_behavior": "aks_refuse", "expected_phrases": [], "notes": "Tracker — Dashboard Designer"}
+{"id": "oos-tableau", "question": "How do I integrate QA with Tableau dashboards?", "expected_behavior": "gate_refuse", "expected_phrases": [], "notes": "Out-of-scope — third-party integration not in manuals"}
+{"id": "oos-snowflake", "question": "How do I connect QA to Snowflake?", "expected_behavior": "gate_refuse", "expected_phrases": [], "notes": "Out-of-scope — third-party datasource not in manuals"}
+{"id": "oos-rest-api", "question": "What REST API endpoints does QA expose?", "expected_behavior": "gate_refuse", "expected_phrases": [], "notes": "Out-of-scope — no public REST API documented"}

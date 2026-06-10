@@ -1,4 +1,4 @@
-.PHONY: install dev fmt lint typecheck test ingest run docker
+.PHONY: install dev fmt lint typecheck test eval ingest run docker
 
 install:
 	python -m pip install -e ".[dev]"
@@ -17,6 +17,9 @@ typecheck:
 
 test:
 	pytest -q
+
+eval:
+	python scripts/run_eval.py
 
 ingest:
 	python scripts/ingest_pdfs.py

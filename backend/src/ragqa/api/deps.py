@@ -9,6 +9,7 @@ from ragqa.config import Settings, get_settings
 from ragqa.core.errors import IndexNotFoundError
 from ragqa.core.logging import get_logger
 from ragqa.generation.llm import MultimodalAnswerer
+from ragqa.retrieval.bm25 import Bm25Index
 from ragqa.retrieval.embeddings import DenseEmbedder, SparseEncoder
 from ragqa.retrieval.hybrid import HybridRetriever
 from ragqa.retrieval.rerank import CrossEncoderReranker
@@ -60,8 +61,19 @@ def _build_components() -> dict:
     )
     reranker = CrossEncoderReranker(model_name=s.reranker_model) if s.reranker_model else None
 
+    # In-memory BM25 index over the chunk corpus. Loaded once at startup;
+    # fails closed (disables BM25 fusion) if the JSONL is missing so the dev
+    # path still works in stub-Pinecone tests where chunks aren't present.
+    bm25: Bm25Index | None = None
+    if s.bm25_enabled:
+        try:
+            bm25 = Bm25Index.from_jsonl(s.chunks_jsonl)
+        except FileNotFoundError as e:
+            log.warning("bm25.disabled.no_jsonl", path=str(s.chunks_jsonl), error=str(e))
+
     retriever = HybridRetriever(
-        settings=s, store=store, dense=dense, sparse=sparse, reranker=reranker
+        settings=s, store=store, dense=dense, sparse=sparse,
+        reranker=reranker, bm25=bm25,
     )
 
     answerer = MultimodalAnswerer(

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Send, Loader2, Bot, User, Image as ImageIcon, ImageOff, X, Menu, BookOpen } from "lucide-react";
+import { Send, Loader2, Bot, User, Image as ImageIcon, ImageOff, X, Menu, BookOpen, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { AssistantMessage } from "@/components/message";
@@ -415,10 +415,43 @@ function TurnView({ turn }: { turn: Turn }) {
   }
   const data: AnswerResponse = turn.data;
   const imagesEnabled: boolean = turn.imagesEnabled;
+  const reqId = data.request_id || null;
+  const [rating, setRating] = React.useState<-1 | 0 | 1>(0);
+  const onRate = async (next: -1 | 1) => {
+    if (!reqId) return;
+    const value: -1 | 0 | 1 = rating === next ? 0 : next;
+    setRating(value);
+    try {
+      await backend.feedback({
+        request_id:     reqId,
+        rating:         value,
+        query:          data.query,
+        answer_excerpt: (data.answer || "").slice(0, 500),
+        intent:         data.intent ?? "",
+        answerable:     data.answerable ?? null,
+        faithfulness:   data.faithfulness ?? null,
+        low_confidence: !!data.low_confidence,
+      });
+    } catch {
+      // Optimistic — revert silently on failure rather than blocking the user.
+      setRating(rating);
+    }
+  };
   return (
     <div className="flex gap-2.5">
       <Avatar role="assistant" />
       <div className="flex-1 rounded-lg bg-[var(--muted)] px-3 py-2.5">
+        {data.low_confidence && (
+          <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-400/40 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-1.5 text-xs text-amber-900 dark:text-amber-200">
+            <span aria-hidden="true">⚠</span>
+            <span>
+              <span className="font-medium">Low confidence.</span>{" "}
+              Some claims in this answer may not be fully grounded in the
+              manuals — verify against the cited sources before relying on
+              specific commands or labels.
+            </span>
+          </div>
+        )}
         <AssistantMessage
           text={data.answer}
           images={imagesEnabled ? data.images : []}
@@ -456,6 +489,41 @@ function TurnView({ turn }: { turn: Turn }) {
               >
                 build {data.build.git_sha}
               </span>
+            </>
+          )}
+          {reqId && (
+            <>
+              <span>·</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => void onRate(1)}
+                  aria-label="Rate this answer helpful"
+                  title={rating === 1 ? "Remove thumbs up" : "Thumbs up"}
+                  className={cn(
+                    "rounded p-0.5 transition-colors",
+                    rating === 1
+                      ? "text-[var(--accent)] bg-[var(--accent)]/10"
+                      : "text-[var(--muted-foreground)] hover:bg-[var(--background)]"
+                  )}
+                >
+                  <ThumbsUp className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onRate(-1)}
+                  aria-label="Rate this answer unhelpful"
+                  title={rating === -1 ? "Remove thumbs down" : "Thumbs down"}
+                  className={cn(
+                    "rounded p-0.5 transition-colors",
+                    rating === -1
+                      ? "text-red-600 bg-red-500/10"
+                      : "text-[var(--muted-foreground)] hover:bg-[var(--background)]"
+                  )}
+                >
+                  <ThumbsDown className="size-3" />
+                </button>
+              </div>
             </>
           )}
         </div>

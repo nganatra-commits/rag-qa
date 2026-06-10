@@ -32,6 +32,7 @@ class AnswerResult:
     used_images: list[str]
     input_tokens: int
     output_tokens: int
+    cached_tokens: int = 0  # gpt-5.x prompt-cache hits (from usage.prompt_tokens_details)
 
 
 class MultimodalAnswerer:
@@ -118,6 +119,11 @@ class MultimodalAnswerer:
         cited_chunks = [h.chunk.chunk_id for h in hits]
         cited_images = self._extract_image_ids(text)
 
+        # gpt-5.x / o-series surface prompt cache hits under
+        # `usage.prompt_tokens_details.cached_tokens`. Older models don't,
+        # in which case `.get(...) or {}` keeps it at 0.
+        details = usage.get("prompt_tokens_details") or {}
+        cached_tokens = int(details.get("cached_tokens", 0) or 0)
         return AnswerResult(
             answer=text,
             cited_chunk_ids=cited_chunks,
@@ -126,6 +132,7 @@ class MultimodalAnswerer:
             used_images=used_images,
             input_tokens=int(usage.get("prompt_tokens", 0) or 0),
             output_tokens=int(usage.get("completion_tokens", 0) or 0),
+            cached_tokens=cached_tokens,
         )
 
     def _image_blocks(self, hits: list[RetrievalHit]) -> tuple[list[dict], list[str]]:

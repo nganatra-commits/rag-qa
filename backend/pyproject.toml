@@ -27,6 +27,7 @@ dependencies = [
     "pinecone>=5.4",
     "pinecone-text>=0.10",
     "sentence-transformers>=3.3",
+    "rank-bm25>=0.2",
     # LLM / VLM
     "openai>=1.55",
     # Logging / observability

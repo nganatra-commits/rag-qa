@@ -55,7 +55,17 @@ class Settings(BaseSettings):
     # --- Retrieval ---
     top_k: int = 20
     rerank_top_k: int = 5
-    hybrid_alpha: float = 0.6  # 0=BM25, 1=dense
+    hybrid_alpha: float = 0.6  # 0=BM25, 1=dense (legacy Pinecone-side knob)
+
+    # --- BM25 (in-process sparse index, fused into hybrid via RRF) ---
+    # The legacy Pinecone-side sparse channel is a no-op (pinecone-text BM25
+    # imports NLTK which hangs on Windows). Instead we maintain an in-memory
+    # BM25 over chunks_v1.jsonl at startup and fuse its rankings with the
+    # dense lists via Reciprocal Rank Fusion. Disable to fall back to
+    # dense-only retrieval.
+    bm25_enabled: bool = True
+    bm25_top_k: int = 20    # candidates BM25 contributes per query
+    rrf_k: int = 60          # RRF damping constant; standard literature value
 
     # --- Generation ---
     max_output_tokens: int = 1024
@@ -71,6 +81,13 @@ class Settings(BaseSettings):
     chats_table: str = ""
     chats_region: str = "us-east-1"
     chats_max_list: int = 50
+
+    # --- SME feedback (DynamoDB; blank table name disables persistence) ---
+    # Per-turn 👍/👎 with optional comment. Same DynamoDB connection pattern
+    # as chats; blank table name → log-only fallback (no regression from the
+    # pre-Ring-3 stub /feedback route).
+    feedback_table: str = ""
+    feedback_region: str = "us-east-1"
 
     # --- Query rewriting / expansion (multi-query retrieval) ---
     # Disable to skip the rewrite call and fall back to single-query retrieval.
@@ -94,6 +111,21 @@ class Settings(BaseSettings):
     # flips an in-scope question to a refusal. out_of_scope intent is the
     # primary refuse signal (see routes.py); this is the garbage floor.
     answerability_threshold: float = 0.05
+
+    # --- Faithfulness verifier (post-generation) ---
+    # A second cheaper LLM call reads the question + answer + chunks and
+    # scores how grounded the answer is. The frontend renders a low-confidence
+    # badge when faithfulness < verify_threshold. Fails open (returns 1.0) on
+    # any error, so disabling has zero risk.
+    verify_enabled: bool = True
+    verify_model: str = "gpt-5.4-mini"
+    verify_max_tokens: int = 2500              # reasoning-token + output headroom
+    # The answer LLM saw FULL chunks; if we hand the verifier a truncated
+    # view it over-flags "unsupported" simply because the supporting text
+    # is past the cutoff. 2000 chars covers virtually every chunk in this
+    # corpus (most are 800–1500 chars). If chunks grow, raise this.
+    verify_chunk_chars: int = 2000
+    verify_threshold: float = 0.7              # below -> low_confidence flag
 
     # --- Build metadata (baked into image at docker build time via ARGs) ---
     # Exposed via /version and on each /answer response so reviewers can

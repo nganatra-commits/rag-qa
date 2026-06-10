@@ -12,3 +12,6 @@ data/lancedb/
 data/cache/
 data/*.jsonl
 *.log
+
+# Eval harness reports (commit only when baselining a build)
+eval/eval-report-*.json

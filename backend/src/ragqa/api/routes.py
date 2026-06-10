@@ -35,6 +35,7 @@ from ragqa.api.schemas import (
 from ragqa.config import Settings, get_settings
 from ragqa.core.logging import get_logger
 from ragqa.generation.llm import MultimodalAnswerer
+from ragqa.generation.verify import verify_answer
 from ragqa.retrieval.hybrid import HybridRetriever
 from ragqa.retrieval.query_rewriter import expand_query
 from ragqa.retrieval.understand import understand_and_rerank
@@ -143,6 +144,55 @@ _REFUSAL_RE = _re.compile(
 def _looks_like_refusal(answer: str) -> bool:
     head = (answer or "").strip().splitlines()[0] if answer else ""
     return bool(_REFUSAL_RE.match(head))
+
+
+_MARKER_RE = _re.compile(r"\[(\d+)\]")
+
+
+def _reorder_citations_by_page(answer: str, hits):
+    """Renumber `[N]` markers so cited chunks appear in ascending page order.
+
+    Dom's 6/6 eval flagged source lists that read 422-424 → 2-3 → 356-358
+    because the frontend renders citations in the LLM's rerank order. We
+    permute hits so cited chunks come first sorted by `page_start`, then
+    rewrite `[N]` in the answer text to match. Uncited hits keep their
+    original relative order at the tail.
+
+    Returns (new_answer, new_hits). A no-op when no `[N]` markers reference
+    a valid chunk.
+    """
+    if not answer or not hits:
+        return answer, hits
+    cited_old = []
+    seen = set()
+    for m in _MARKER_RE.finditer(answer):
+        n = int(m.group(1))
+        if 1 <= n <= len(hits) and n not in seen:
+            cited_old.append(n)
+            seen.add(n)
+    if not cited_old:
+        return answer, hits
+    cited_sorted = sorted(
+        cited_old,
+        key=lambda n: (hits[n - 1].chunk.page_start, n),
+    )
+    remap = {old: new for new, old in enumerate(cited_sorted, start=1)}
+    # Early-out only when every marker already maps to itself (no text change
+    # AND no hit reorder needed): cited_old must already be [1, 2, ..., K].
+    if cited_old == list(range(1, len(cited_old) + 1)) and remap == {
+        n: n for n in cited_old
+    }:
+        return answer, hits
+
+    def _sub(m):
+        n = int(m.group(1))
+        return f"[{remap[n]}]" if n in remap else m.group(0)
+
+    new_answer = _MARKER_RE.sub(_sub, answer)
+    cited_set = set(cited_sorted)
+    new_hits = [hits[old - 1] for old in cited_sorted]
+    new_hits.extend(h for i, h in enumerate(hits, start=1) if i not in cited_set)
+    return new_answer, new_hits
 
 
 @router.get("/health", response_model=HealthResponse, tags=["meta"])
@@ -271,7 +321,7 @@ def answer(
     # tempted to fabricate a workflow from adjacent chart-display features.
     if _looks_like_aks_topic(body.query):
         log.info("answer.refused.aks_topic", request_id=request_id, query=body.query[:120])
-        return _aks_refusal_response(body.query, t0, build)
+        return _aks_refusal_response(body.query, t0, build, request_id=request_id)
 
     # History relevance gate: drop prior turns when the new query is on a
     # different topic (token overlap below threshold AND no follow-up prefix).
@@ -312,6 +362,7 @@ def answer(
         doc_filter=body.doc_filter,
         expanded_queries=expanded,
     )
+    t_retrieve_done = time.perf_counter()
 
     # Question understanding + LLM rerank + answerability gate. One call
     # classifies intent, reranks candidates by judged relevance, and
@@ -319,10 +370,12 @@ def answer(
     # answer — before spending the answer call. Fails open.
     u_intent: str | None = None
     u_answerable: float | None = None
+    t_rerank_done = t_retrieve_done
     if settings.understand_enabled and hits:
         u = understand_and_rerank(retrieval_query, hits, settings)
         hits = u.reranked_hits
         u_intent, u_answerable = u.intent, u.answerable
+        t_rerank_done = time.perf_counter()
         # CONSERVATIVE gate — only refuse on the clearest signals. Live
         # data: gibberish scores ~0.01 while genuinely-answerable
         # questions score ≥0.18 (and gpt-5.x self-scores HARSHLY +
@@ -341,7 +394,8 @@ def answer(
                      query=body.query[:120], intent=u.intent,
                      answerable=round(u.answerable, 3))
             return _not_found_refusal_response(body.query, t0, build,
-                                               u_intent, u_answerable)
+                                               u_intent, u_answerable,
+                                               request_id=request_id)
     # Strip blank/uniform images from each hit's chunk before they reach
     # the LLM and the response payload. Same Chunk objects come from the
     # Pinecone metadata round-trip, so editing here is local and safe.
@@ -383,6 +437,7 @@ def answer(
             input_tokens=0, output_tokens=0,
             latency_ms=int((time.perf_counter() - t0) * 1000),
             build=build,
+            request_id=request_id,
         )
 
     if body.max_images is not None:
@@ -393,6 +448,18 @@ def answer(
         if keep_history else []
     )
     result = answerer.answer(query=body.query, hits=hits, history=history_pairs)
+    t_answer_done = time.perf_counter()
+
+    final_answer, hits = _reorder_citations_by_page(result.answer, hits)
+
+    # Faithfulness verifier — second cheaper LLM call grades whether the
+    # answer's claims are grounded in `hits`. Fails open (faithfulness=1.0)
+    # on any error so this stage never degrades the answer path.
+    v = verify_answer(query=body.query, answer=final_answer, hits=hits,
+                      settings=settings)
+    t_verify_done = time.perf_counter()
+    faithfulness = v.faithfulness
+    low_confidence = v.used_llm and faithfulness < settings.verify_threshold
 
     citations = [
         AnswerCitation(
@@ -418,6 +485,11 @@ def answer(
         for h in hits for img in h.chunk.images
     ]
 
+    retrieve_ms = int((t_retrieve_done - t0) * 1000)
+    rerank_ms = int((t_rerank_done - t_retrieve_done) * 1000)
+    answer_ms = int((t_answer_done - t_rerank_done) * 1000)
+    verify_ms = int((t_verify_done - t_answer_done) * 1000)
+
     log.info("answer.served",
              request_id=request_id,
              query=body.query[:120],
@@ -425,32 +497,68 @@ def answer(
              images=len(images),
              referenced_images=result.cited_image_ids,
              input_tokens=result.input_tokens,
-             output_tokens=result.output_tokens)
+             output_tokens=result.output_tokens,
+             cached_tokens=result.cached_tokens,
+             retrieve_ms=retrieve_ms, rerank_ms=rerank_ms,
+             answer_ms=answer_ms, verify_ms=verify_ms,
+             faithfulness=round(faithfulness, 3),
+             low_confidence=low_confidence)
 
     return AnswerResponse(
         query=body.query,
-        answer=result.answer,
+        answer=final_answer,
         citations=citations,
         images=images,
         referenced_image_ids=result.cited_image_ids,
         chunks=[h.chunk for h in hits],
-        is_refusal=_looks_like_refusal(result.answer),
+        is_refusal=_looks_like_refusal(final_answer),
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
         latency_ms=int((time.perf_counter() - t0) * 1000),
         build=build,
         intent=u_intent,
         answerable=u_answerable,
+        faithfulness=faithfulness,
+        low_confidence=low_confidence,
+        request_id=request_id,
+        retrieve_ms=retrieve_ms,
+        rerank_ms=rerank_ms,
+        answer_ms=answer_ms,
+        verify_ms=verify_ms,
     )
 
 
 @router.post("/feedback", tags=["rag"],
              dependencies=[Depends(require_api_key)])
-def feedback(body: FeedbackRequest) -> JSONResponse:
+def feedback(
+    body: FeedbackRequest,
+    settings: Settings = Depends(get_settings),
+) -> JSONResponse:
     log.info("feedback.received", request_id=body.request_id,
-             rating=body.rating, note=body.note[:200])
-    # TODO(prod): persist to a feedback store (Postgres, S3 jsonl, Langfuse)
-    return JSONResponse({"ok": True})
+             rating=body.rating, note=body.note[:200],
+             low_confidence=body.low_confidence)
+    persisted = False
+    if settings.feedback_table:
+        try:
+            from ragqa.storage.feedback_store import get_feedback_store
+            store = get_feedback_store()
+            store.put({
+                "request_id":     body.request_id,
+                "rating":         body.rating,
+                "note":           body.note,
+                "query":          body.query,
+                "answer_excerpt": body.answer_excerpt,
+                "build_sha":      settings.build_git_sha,
+                "intent":         body.intent,
+                "answerable":     body.answerable,
+                "faithfulness":   body.faithfulness,
+                "low_confidence": body.low_confidence,
+            })
+            persisted = True
+        except Exception as e:
+            log.error("feedback.persist.fail", request_id=body.request_id,
+                      err=repr(e))
+    return JSONResponse({"ok": True, "persisted": persisted})
 
 
 @router.get("/api/images/{image_id}", tags=["images"])
@@ -582,7 +690,8 @@ def _looks_like_aks_topic(query: str) -> bool:
 
 
 def _aks_refusal_response(query: str, started_at: float,
-                          build: BuildInfo | None = None) -> AnswerResponse:
+                          build: BuildInfo | None = None,
+                          request_id: str | None = None) -> AnswerResponse:
     return AnswerResponse(
         query=query,
         answer=_AKS_REFUSAL,
@@ -591,6 +700,7 @@ def _aks_refusal_response(query: str, started_at: float,
         input_tokens=0, output_tokens=0,
         latency_ms=int((time.perf_counter() - started_at) * 1000),
         build=build,
+        request_id=request_id,
     )
 
 
@@ -604,7 +714,8 @@ _NOT_FOUND_REFUSAL = (
 def _not_found_refusal_response(query: str, started_at: float,
                                 build: BuildInfo | None = None,
                                 intent: str | None = None,
-                                answerable: float | None = None) -> AnswerResponse:
+                                answerable: float | None = None,
+                                request_id: str | None = None) -> AnswerResponse:
     """Deterministic refusal when the understand stage judges the
     retrieved chunks can't answer the question — emitted WITHOUT calling
     the answer model."""
@@ -618,6 +729,7 @@ def _not_found_refusal_response(query: str, started_at: float,
         build=build,
         intent=intent,
         answerable=answerable,
+        request_id=request_id,
     )
 
 

@@ -106,12 +106,37 @@ class AnswerResponse(BaseModel):
     # see WHY a refusal happened.
     intent: str | None = None
     answerable: float | None = None
+    # Faithfulness verifier output (optional): a second LLM call scores
+    # whether the answer's claims are grounded in the retrieved chunks.
+    # `low_confidence` is true when faithfulness < verify_threshold so the
+    # UI can render a low-confidence badge without re-deriving the cutoff.
+    faithfulness: float | None = None
+    low_confidence: bool = False
+    # The internal request_id (already logged for each /answer call). Surfaced
+    # so the frontend can attach it to a feedback POST without round-tripping.
+    request_id: str | None = None
+    # Per-stage wall-clock breakdown (ms). Useful for cost/latency analysis;
+    # `latency_ms` is the end-to-end total.
+    retrieve_ms: int | None = None
+    rerank_ms: int | None = None
+    answer_ms: int | None = None
+    verify_ms: int | None = None
 
 
 class FeedbackRequest(BaseModel):
     request_id: str
     rating: int = Field(..., ge=-1, le=1)  # -1 thumbs down, 1 thumbs up, 0 neutral
     note: str = Field(default="", max_length=2000)
+    # Optional context the client can include so the feedback record is
+    # self-contained for SME reporting (no cross-reference to the chats
+    # table required). All optional — server fills `build_sha` from its
+    # own /version info.
+    query: str = Field(default="", max_length=1000)
+    answer_excerpt: str = Field(default="", max_length=500)
+    intent: str = Field(default="", max_length=32)
+    answerable: float | None = None
+    faithfulness: float | None = None
+    low_confidence: bool = False
 
 
 # --- Chat history ---------------------------------------------------------

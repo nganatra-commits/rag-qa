@@ -62,8 +62,18 @@ export const backend = {
       body: JSON.stringify(body),
     }),
 
-  feedback: (body: { request_id: string; rating: number; note?: string }) =>
-    callBackend<{ ok: boolean }>("/feedback", {
+  feedback: (body: {
+    request_id: string;
+    rating: number;
+    note?: string;
+    query?: string;
+    answer_excerpt?: string;
+    intent?: string;
+    answerable?: number | null;
+    faithfulness?: number | null;
+    low_confidence?: boolean;
+  }) =>
+    callBackend<{ ok: boolean; persisted?: boolean }>("/feedback", {
       method: "POST",
       body: JSON.stringify(body),
     }),

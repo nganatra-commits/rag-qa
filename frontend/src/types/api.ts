@@ -87,6 +87,25 @@ export interface AnswerResponse {
   output_tokens: number;
   latency_ms: number;
   build?: BuildInfo | null;
+  intent?: string | null;
+  answerable?: number | null;
+  /** Faithfulness verifier score 0-1 (post-generation grounding check). */
+  faithfulness?: number | null;
+  /** True when faithfulness < verify_threshold; UI shows a low-confidence badge. */
+  low_confidence?: boolean;
+  /** Server-side request id; attached to feedback submissions. */
+  request_id?: string | null;
+  retrieve_ms?: number | null;
+  rerank_ms?: number | null;
+  answer_ms?: number | null;
+  verify_ms?: number | null;
+}
+
+export interface FeedbackRequest {
+  request_id: string;
+  /** -1 = thumbs down, 1 = thumbs up, 0 = neutral/reset. */
+  rating: number;
+  note?: string;
 }
 
 export interface RetrieveResponse {
